@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
-import 'package:camera_avfoundation/camera_avfoundation.dart';
-import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';

@@ -34,6 +34,7 @@ dev_dependencies:
 
 ####################
 flutter:
-  uses-material-design: true
   assets:
-    - assets/
+    - assets/glasses1.png
+    - assets/glasses2.png
+    - assets/glasses3.png
