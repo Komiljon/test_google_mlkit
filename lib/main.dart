@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:vector_math/vector_math_64.dart' hide Colors; // Добавляем импорт для Matrix4
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +47,7 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   ui.Image? _image;
   Size? _imageSize;
   String? _selectedGlasses;
+  ui.Image? _glassesImage;
 
   final List<String> glassesAssets = ['assets/glasses1.png', 'assets/glasses2.png', 'assets/glasses3.png'];
 
@@ -85,10 +89,21 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
     }
   }
 
-  void _selectGlasses(String assetPath) {
-    setState(() {
-      _selectedGlasses = assetPath;
-    });
+  Future<void> _selectGlasses(String assetPath) async {
+    try {
+      // Загружаем изображение очков
+      final ByteData data = await rootBundle.load(assetPath);
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await codec.getNextFrame();
+
+      setState(() {
+        _selectedGlasses = assetPath;
+        _glassesImage = frame.image;
+      });
+    } catch (e) {
+      print('Error loading glasses image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки очков: $e')));
+    }
   }
 
   @override
@@ -100,13 +115,14 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
           Expanded(
             child: Center(
               child: _image == null
-                  ? const Text('Выберите изображение')
+                  ? const Text('Выберите изображение', style: TextStyle(fontSize: 18))
                   : FittedBox(
+                      fit: BoxFit.contain,
                       child: SizedBox(
                         width: _imageSize!.width,
                         height: _imageSize!.height,
                         child: CustomPaint(
-                          painter: FacePainter(faceList: _faces, image: _image!, glassesAsset: _selectedGlasses),
+                          painter: FacePainter(faceList: _faces, image: _image!, glassesImage: _glassesImage),
                         ),
                       ),
                     ),
@@ -134,8 +150,15 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                     margin: const EdgeInsets.all(8),
                     width: 80,
                     height: 80,
-                    color: _selectedGlasses == glassesAssets[index] ? Colors.blue[100] : Colors.grey[200],
-                    child: Center(child: Text('Очки ${index + 1}')),
+                    decoration: BoxDecoration(
+                      color: _selectedGlasses == glassesAssets[index] ? Colors.blue[100] : Colors.grey[200],
+                      border: Border.all(
+                        color: _selectedGlasses == glassesAssets[index] ? Colors.blue : Colors.transparent,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(child: Text('Очки ${index + 1}', textAlign: TextAlign.center)),
                   ),
                 );
               },
@@ -147,14 +170,12 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   }
 }
 
-// КЛАСС FacePainter - ДОБАВЬТЕ ЭТОТ КОД
 class FacePainter extends CustomPainter {
   final List<Face> faceList;
   final ui.Image image;
-  final String? glassesAsset;
-  ui.Image? glassesImage;
+  final ui.Image? glassesImage;
 
-  FacePainter({required this.faceList, required this.image, this.glassesAsset});
+  FacePainter({required this.faceList, required this.image, this.glassesImage});
 
   @override
   void paint(ui.Canvas canvas, ui.Size size) {
@@ -171,17 +192,56 @@ class FacePainter extends CustomPainter {
       final rect = face.boundingBox;
       canvas.drawRect(rect, paint);
 
-      // Если выбраны очки, рисуем их на лице
-      if (glassesAsset != null) {
-        // Здесь нужно добавить код для рисования очков
-        // Для этого нужно получить координаты глаз из face.landmarks
-        // и разместить очки соответствующим образом
+      // Если выбраны очки и изображение загружено, рисуем их на лице
+      if (glassesImage != null && face.landmarks != null) {
+        _drawGlassesOnFace(canvas, face, glassesImage!);
       }
     }
   }
 
+  void _drawGlassesOnFace(ui.Canvas canvas, Face face, ui.Image glassesImage) {
+    // Получаем ключевые точки глаз
+    final leftEyeLandmark = face.landmarks?[FaceLandmarkType.leftEye];
+    final rightEyeLandmark = face.landmarks?[FaceLandmarkType.rightEye];
+
+    if (leftEyeLandmark == null || rightEyeLandmark == null) return;
+
+    // Получаем координаты точек
+    final leftEye = leftEyeLandmark.position;
+    final rightEye = rightEyeLandmark.position;
+
+    // Рассчитываем позицию и размер очков
+    final eyeDistance = rightEye.x - leftEye.x;
+    final glassesWidth = eyeDistance * 2.3; // Ширина очков
+    final glassesHeight = glassesWidth * 0.4; // Пропорции очков
+
+    // Центр очков - между глазами
+    final centerX = (leftEye.x + rightEye.x) / 2;
+    final centerY = (leftEye.y + rightEye.y) / 2 - (glassesHeight * 0.1); // Смещение вверх
+
+    // Рассчитываем угол наклона линии глаз
+    final dx = rightEye.x - leftEye.x;
+    final dy = rightEye.y - leftEye.y;
+    final eyeAngle = -dy / dx * 0.1; // Небольшой коэффициент для коррекции
+
+    // Создаем матрицу трансформации
+    final matrix = Matrix4.identity()
+      ..translate(centerX, centerY)
+      ..rotateZ(eyeAngle)
+      ..translate(-glassesWidth / 2, -glassesHeight / 2);
+
+    // Рисуем очки
+    final srcRect = ui.Rect.fromLTWH(0, 0, glassesImage.width.toDouble(), glassesImage.height.toDouble());
+    final dstRect = ui.Rect.fromLTWH(0, 0, glassesWidth, glassesHeight);
+
+    canvas.save();
+    canvas.transform(matrix.storage);
+    canvas.drawImageRect(glassesImage, srcRect, dstRect, ui.Paint());
+    canvas.restore();
+  }
+
   @override
   bool shouldRepaint(covariant FacePainter oldDelegate) {
-    return oldDelegate.faceList != faceList || oldDelegate.image != image || oldDelegate.glassesAsset != glassesAsset;
+    return oldDelegate.faceList != faceList || oldDelegate.image != image || oldDelegate.glassesImage != glassesImage;
   }
 }
