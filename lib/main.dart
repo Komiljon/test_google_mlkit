@@ -1,27 +1,67 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-
-import 'screens/test_google_mlkit.dart';
+import 'package:augen/augen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
-  final firstCamera = cameras.first;
-
-  runApp(MyApp(camera: firstCamera));
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final CameraDescription camera;
-
-  const MyApp({super.key, required this.camera});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Virtual Glasses Try-On',
       theme: ThemeData(primarySwatch: Colors.blue, visualDensity: VisualDensity.adaptivePlatformDensity),
-      home: GlassesTryOnScreen(camera: camera),
+      home: ARScreen(),
     );
+  }
+}
+
+class ARScreen extends StatefulWidget {
+  @override
+  State<ARScreen> createState() => _ARScreenState();
+}
+
+class _ARScreenState extends State<ARScreen> {
+  AugenController? _controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: AugenView(
+        onViewCreated: _onARViewCreated,
+        config: ARSessionConfig(planeDetection: true, lightEstimation: true, depthData: false, autoFocus: true),
+      ),
+    );
+  }
+
+  void _onARViewCreated(AugenController controller) {
+    _controller = controller;
+    _initializeAR();
+  }
+
+  Future<void> _initializeAR() async {
+    // Check AR support
+    final isSupported = await _controller!.isARSupported();
+    if (!isSupported) {
+      print('AR is not supported on this device');
+      return;
+    }
+
+    // Initialize AR session
+    await _controller!.initialize(ARSessionConfig(planeDetection: true, lightEstimation: true));
+
+    // Listen to detected planes
+    _controller!.planesStream.listen((planes) {
+      print('Detected ${planes.length} planes');
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
   }
 }
