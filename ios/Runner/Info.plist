@@ -57,5 +57,12 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+	<string>arm64</string>
+	<string>arkit</string>
+	</array>
 </dict>
 </plist>
