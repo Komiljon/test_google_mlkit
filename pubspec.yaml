@@ -1,5 +1,5 @@
 name: test_google_mlkit
-description: "Google ML Kit"
+description: "Приложение для примерки очков в дополненной реальности"
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
@@ -35,3 +35,4 @@ flutter:
     - assets/glasses1.png
     - assets/glasses2.png
     - assets/glasses3.png
+    - assets/models/
