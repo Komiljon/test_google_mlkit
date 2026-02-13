@@ -125,7 +125,7 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
         // Удаляем старые очки, если есть
         _controller!.removeNode(glassesNodeId);
 
-        // Создаем новую 3D модель очков
+        // Создаем новую 3D модель очков из внешнего файла
         final glassesNode = ARNode.fromModel(
           id: glassesNodeId,
           modelPath: _selectedGlasses!,
