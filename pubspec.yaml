@@ -19,7 +19,7 @@ dependencies:
   path: ^1.9.1
   image_picker: ^1.2.1
   vector_math: ^2.2.0
-  augen: ^1.0.2
+  augen: ^1.0.1
 
 
 ####################
