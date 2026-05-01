@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'glasses_try_on_3d_screen.dart';
+
 class GlassesTryOnScreen extends StatefulWidget {
   final CameraDescription camera;
 
@@ -86,7 +88,22 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Virtual Glasses Try-On')),
+      appBar: AppBar(
+        title: const Text('Virtual Glasses Try-On'),
+        actions: [
+          IconButton(
+            tooltip: 'Открыть 3D режим',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => GlassesTryOn3DScreen(camera: widget.camera),
+                ),
+              );
+            },
+            icon: const Icon(Icons.view_in_ar),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -112,6 +129,32 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               children: [
                 ElevatedButton(onPressed: () => _getAndScanImage(isFromCamera: true), child: const Text('Камера')),
                 ElevatedButton(onPressed: () => _getAndScanImage(isFromCamera: false), child: const Text('Галерея')),
+              ],
+            ),
+          ),
+          // Явный переключатель режимов: текущий экран — 2D PNG; 3D GLB — отдельный экран.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                Chip(
+                  avatar: const Icon(Icons.image_outlined, size: 18),
+                  label: const Text('Сейчас: 2D (PNG очки)'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => GlassesTryOn3DScreen(camera: widget.camera),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.view_in_ar),
+                  label: const Text('3D примерка (GLB)'),
+                ),
               ],
             ),
           ),
@@ -198,9 +241,18 @@ class FacePainter extends CustomPainter {
     final dy = rightMostEye.y - leftMostEye.y;
     final eyeDistance = math.sqrt(dx * dx + dy * dy);
 
-    // Ширину очков масштабируем относительно межглазного расстояния.
-    // Коэффициент 2.3 оставляем как базовую калибровку под текущие ассеты.
-    final glassesWidth = eyeDistance * 2.3;
+    // Ширину очков считаем от двух опор:
+    // 1) межглазное расстояние хорошо держит масштаб линз;
+    // 2) ширина faceBox не даёт оправе получиться слишком маленькой для лица.
+    // Для реальной посадки очки обычно занимают примерно 75-90% ширины лица.
+    const eyeDistanceWidthFactor = 2.65;
+    const minFaceWidthFactor = 0.74;
+    const maxFaceWidthFactor = 0.92;
+    final faceWidth = face.boundingBox.width;
+    final eyeBasedWidth = eyeDistance * eyeDistanceWidthFactor;
+    final minFaceBasedWidth = faceWidth * minFaceWidthFactor;
+    final maxFaceBasedWidth = faceWidth * maxFaceWidthFactor;
+    final glassesWidth = eyeBasedWidth.clamp(minFaceBasedWidth, maxFaceBasedWidth).toDouble();
 
     // Высоту считаем по реальному aspect ratio PNG, чтобы не "сплющивать" модель.
     final glassesAspect = glassesImage.height / glassesImage.width;
@@ -210,7 +262,7 @@ class FacePainter extends CustomPainter {
     final centerX = (leftMostEye.x + rightMostEye.x) / 2;
     // Небольшой вертикальный оффсет оставляем параметром калибровки:
     // отрицательное значение поднимает очки, положительное опускает.
-    const verticalOffsetFactor = -0.02;
+    const verticalOffsetFactor = 0.01;
     final centerY = (leftMostEye.y + rightMostEye.y) / 2 + (glassesHeight * verticalOffsetFactor);
 
     // Угол наклона очков должен совпадать с линией глаз.

@@ -24,6 +24,7 @@ dependencies:
   path: ^1.9.1
   image_picker: ^1.2.1
   vector_math: ^2.2.0
+  flutter_3d_controller: ^2.2.0
 
 
 ####################
@@ -39,3 +40,5 @@ flutter:
     - assets/glasses1.png
     - assets/glasses2.png
     - assets/glasses3.png
+    - assets/sunglasses.glb
+    - assets/sunglasses_lenses.glb

@@ -51,7 +51,13 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен для записи видео</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Для выбора фото для примерки очков</string>	
+	<string>Для выбора фото для примерки очков</string>
+	<!-- Локальный HTTP WebView (flutter_3d_controller / model-viewer) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

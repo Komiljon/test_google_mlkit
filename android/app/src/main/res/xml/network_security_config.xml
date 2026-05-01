@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- flutter_3d_controller отдаёт model-viewer через локальный HTTP (http://127.0.0.1:...)
+     На Android 9+ без этого WebView даёт net::ERR_CLEARTEXT_NOT_PERMITTED. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
