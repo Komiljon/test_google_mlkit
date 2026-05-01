@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:vector_math/vector_math_64.dart' hide Colors; // Добавляем импорт для Matrix4
 
 class GlassesTryOnScreen extends StatefulWidget {
   final CameraDescription camera;
@@ -78,7 +77,8 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
         _glassesImage = frame.image;
       });
     } catch (e) {
-      print('Error loading glasses image: $e');
+      debugPrint('Error loading glasses image: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки очков: $e')));
     }
   }
@@ -169,8 +169,8 @@ class FacePainter extends CustomPainter {
       final rect = face.boundingBox;
       canvas.drawRect(rect, paint);
 
-      // Если выбраны очки и изображение загружено, рисуем их на лице
-      if (glassesImage != null && face.landmarks != null) {
+      // Если выбраны очки и изображение загружено, рисуем их на лице.
+      if (glassesImage != null) {
         _drawGlassesOnFace(canvas, face, glassesImage!);
       }
     }
@@ -178,34 +178,54 @@ class FacePainter extends CustomPainter {
 
   void _drawGlassesOnFace(ui.Canvas canvas, Face face, ui.Image glassesImage) {
     // Получаем ключевые точки глаз
-    final leftEyeLandmark = face.landmarks?[FaceLandmarkType.leftEye];
-    final rightEyeLandmark = face.landmarks?[FaceLandmarkType.rightEye];
+    final leftEyeLandmark = face.landmarks[FaceLandmarkType.leftEye];
+    final rightEyeLandmark = face.landmarks[FaceLandmarkType.rightEye];
 
     if (leftEyeLandmark == null || rightEyeLandmark == null) return;
 
-    // Получаем координаты точек
+    // Получаем координаты точек, которые вернул ML Kit.
     final leftEye = leftEyeLandmark.position;
     final rightEye = rightEyeLandmark.position;
 
-    // Рассчитываем позицию и размер очков
-    final eyeDistance = rightEye.x - leftEye.x;
-    final glassesWidth = eyeDistance * 2.3; // Ширина очков
-    final glassesHeight = glassesWidth * 0.4; // Пропорции очков
+    // На некоторых изображениях/камерах точки могут прийти "зеркально" по X.
+    // Явно определяем левую и правую точку, чтобы геометрия была стабильной.
+    final leftMostEye = leftEye.x <= rightEye.x ? leftEye : rightEye;
+    final rightMostEye = leftEye.x <= rightEye.x ? rightEye : leftEye;
 
-    // Центр очков - между глазами
-    final centerX = (leftEye.x + rightEye.x) / 2;
-    final centerY = (leftEye.y + rightEye.y) / 2 - (glassesHeight * 0.1); // Смещение вверх
+    // Евклидово расстояние между глазами устойчивее, чем только разница по X.
+    // Так размер очков корректно учитывает наклон головы.
+    final dx = rightMostEye.x - leftMostEye.x;
+    final dy = rightMostEye.y - leftMostEye.y;
+    final eyeDistance = math.sqrt(dx * dx + dy * dy);
 
-    // Рассчитываем угол наклона линии глаз
-    final dx = rightEye.x - leftEye.x;
-    final dy = rightEye.y - leftEye.y;
-    final eyeAngle = -dy / dx * 0.1; // Небольшой коэффициент для коррекции
+    // Ширину очков масштабируем относительно межглазного расстояния.
+    // Коэффициент 2.3 оставляем как базовую калибровку под текущие ассеты.
+    final glassesWidth = eyeDistance * 2.3;
 
-    // Создаем матрицу трансформации
+    // Высоту считаем по реальному aspect ratio PNG, чтобы не "сплющивать" модель.
+    final glassesAspect = glassesImage.height / glassesImage.width;
+    final glassesHeight = glassesWidth * glassesAspect;
+
+    // Центр очков размещаем между глазами.
+    final centerX = (leftMostEye.x + rightMostEye.x) / 2;
+    // Небольшой вертикальный оффсет оставляем параметром калибровки:
+    // отрицательное значение поднимает очки, положительное опускает.
+    const verticalOffsetFactor = -0.02;
+    final centerY = (leftMostEye.y + rightMostEye.y) / 2 + (glassesHeight * verticalOffsetFactor);
+
+    // Угол наклона очков должен совпадать с линией глаз.
+    // atan2 корректно работает во всех квадрантах и не ломается при dx ~= 0.
+    final eyeAngle = math.atan2(dy, dx);
+
+    // Порядок операций в матрице принципиален:
+    // 1) переносим систему координат в центр очков;
+    // 2) поворачиваем относительно этого центра;
+    // 3) смещаем в левый верхний угол целевого прямоугольника.
+    // Такой порядок гарантирует, что очки вращаются "вокруг лица", а не вокруг (0,0).
     final matrix = Matrix4.identity()
-      ..translate(centerX, centerY)
+      ..translateByDouble(centerX, centerY, 0, 1)
       ..rotateZ(eyeAngle)
-      ..translate(-glassesWidth / 2, -glassesHeight / 2);
+      ..translateByDouble(-glassesWidth / 2, -glassesHeight / 2, 0, 1);
 
     // Рисуем очки
     final srcRect = ui.Rect.fromLTWH(0, 0, glassesImage.width.toDouble(), glassesImage.height.toDouble());
