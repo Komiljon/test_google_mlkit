@@ -34,7 +34,6 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
   ui.Image? _image;
   Size? _imageSize;
   FacePoseData _pose = FacePoseData.invalid;
-  Rect? _faceBox;
 
   @override
   void initState() {
@@ -63,7 +62,6 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
       _image = null;
       _imageSize = null;
       _pose = FacePoseData.invalid;
-      _faceBox = null;
     });
 
     final imageXFile = await _picker.pickImage(source: isFromCamera ? ImageSource.camera : ImageSource.gallery);
@@ -75,14 +73,12 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
     final decodedImage = await decodeImageFromList(imageBytes);
 
     final pose = _poseEstimator.estimatePrimaryFace(faces);
-    final faceBox = faces.isNotEmpty ? faces.first.boundingBox : null;
 
     if (!mounted) return;
     setState(() {
       _image = decodedImage;
       _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
       _pose = pose;
-      _faceBox = faceBox;
     });
   }
 
@@ -109,17 +105,6 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
                                 painter: DecodedImagePainter(_image!),
                               ),
                             ),
-                            if (_faceBox != null)
-                              Positioned.fromRect(
-                                rect: _faceBox!,
-                                child: IgnorePointer(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.red, width: 2),
-                                    ),
-                                  ),
-                                ),
-                              ),
                             Glasses3DOverlay(
                               pose: _pose,
                               modelAssetPath: GlassesAssetPaths.sunglassesLensesGlb,

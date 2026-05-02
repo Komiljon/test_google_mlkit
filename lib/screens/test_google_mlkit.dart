@@ -33,7 +33,14 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   void initState() {
     super.initState();
     _picker = ImagePicker();
-    _faceDetector = FaceDetector(options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast, enableLandmarks: true));
+    // На одиночном снимке из галереи/камеры «accurate» даёт более стабильные landmarks
+    // (уши, скулы) и углы Эйлера — для примерки 2D это важнее скорости, чем в видеопотоке.
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        performanceMode: FaceDetectorMode.accurate,
+        enableLandmarks: true,
+      ),
+    );
   }
 
   @override
@@ -202,16 +209,7 @@ class FacePainter extends CustomPainter {
     // Рисуем исходное изображение
     canvas.drawImage(image, ui.Offset.zero, ui.Paint());
 
-    // Рисуем прямоугольники вокруг лиц (для отладки)
-    final paint = ui.Paint()
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = ui.Color.fromARGB(255, 255, 0, 0);
-
     for (final face in faceList) {
-      final rect = face.boundingBox;
-      canvas.drawRect(rect, paint);
-
       // Если выбраны очки и изображение загружено, рисуем их на лице.
       if (glassesImage != null) {
         _drawGlassesOnFace(canvas, face, glassesImage!);
@@ -220,50 +218,89 @@ class FacePainter extends CustomPainter {
   }
 
   void _drawGlassesOnFace(ui.Canvas canvas, Face face, ui.Image glassesImage) {
-    // Получаем ключевые точки глаз
+    // --- Глаза: якорь линз и угол наклона (roll) ---
     final leftEyeLandmark = face.landmarks[FaceLandmarkType.leftEye];
     final rightEyeLandmark = face.landmarks[FaceLandmarkType.rightEye];
 
     if (leftEyeLandmark == null || rightEyeLandmark == null) return;
 
-    // Получаем координаты точек, которые вернул ML Kit.
     final leftEye = leftEyeLandmark.position;
     final rightEye = rightEyeLandmark.position;
 
     // На некоторых изображениях/камерах точки могут прийти "зеркально" по X.
-    // Явно определяем левую и правую точку, чтобы геометрия была стабильной.
     final leftMostEye = leftEye.x <= rightEye.x ? leftEye : rightEye;
     final rightMostEye = leftEye.x <= rightEye.x ? rightEye : leftEye;
 
-    // Евклидово расстояние между глазами устойчивее, чем только разница по X.
-    // Так размер очков корректно учитывает наклон головы.
     final dx = rightMostEye.x - leftMostEye.x;
     final dy = rightMostEye.y - leftMostEye.y;
+    // Межзрачковое расстояние (IPD) в пикселях — главный масштаб для расстояния между линзами.
     final eyeDistance = math.sqrt(dx * dx + dy * dy);
+    if (eyeDistance <= 1e-6) return;
 
-    // Ширину очков считаем от двух опор:
-    // 1) межглазное расстояние хорошо держит масштаб линз;
-    // 2) ширина faceBox не даёт оправе получиться слишком маленькой для лица.
-    // Для реальной посадки очки обычно занимают примерно 75-90% ширины лица.
-    const eyeDistanceWidthFactor = 2.65;
-    const minFaceWidthFactor = 0.74;
-    const maxFaceWidthFactor = 0.92;
-    final faceWidth = face.boundingBox.width;
-    final eyeBasedWidth = eyeDistance * eyeDistanceWidthFactor;
-    final minFaceBasedWidth = faceWidth * minFaceWidthFactor;
-    final maxFaceBasedWidth = faceWidth * maxFaceWidthFactor;
-    final glassesWidth = eyeBasedWidth.clamp(minFaceBasedWidth, maxFaceBasedWidth).toDouble();
+    // --- Горизонтальный размах лица: ближе к «от виска до виска», чем просто boundingBox ---
+    // ML Kit отдаёт `leftEar`/`rightEar` и `leftCheek`/`rightCheek`. Расстояние между ушными
+    // точками обычно хорошо коррелирует с шириной оправы; скулы — запасной вариант, если уши null
+    // (профиль, перекрытие волосами). Bounding box лица оставляем как нижнюю границу, т.к. иногда
+    // коробка уже, чем визуальная ширина скул.
+    final leftEar = face.landmarks[FaceLandmarkType.leftEar]?.position;
+    final rightEar = face.landmarks[FaceLandmarkType.rightEar]?.position;
+    final leftCheek = face.landmarks[FaceLandmarkType.leftCheek]?.position;
+    final rightCheek = face.landmarks[FaceLandmarkType.rightCheek]?.position;
 
-    // Высоту считаем по реальному aspect ratio PNG, чтобы не "сплющивать" модель.
+    double? earSpanPx;
+    if (leftEar != null && rightEar != null) {
+      final ex = (rightEar.x - leftEar.x).toDouble();
+      final ey = (rightEar.y - leftEar.y).toDouble();
+      earSpanPx = math.sqrt(ex * ex + ey * ey);
+    }
+
+    double? cheekSpanPx;
+    if (leftCheek != null && rightCheek != null) {
+      final cx = (rightCheek.x - leftCheek.x).toDouble();
+      final cy = (rightCheek.y - leftCheek.y).toDouble();
+      cheekSpanPx = math.sqrt(cx * cx + cy * cy);
+    }
+
+    final boxWidth = face.boundingBox.width;
+
+    // Предпочитаем уши, иначе скулы, иначе ширину бокса — это оценка «ширины лица» в кадре.
+    final double facialBreadthRaw = earSpanPx ?? cheekSpanPx ?? boxWidth;
+    // Если детектор «сжал» уши/скулы (редкий кадр), не опускаемся сильно ниже коробки.
+    final double facialBreadth = math.max(facialBreadthRaw, boxWidth * 0.94);
+
+    // Ширина PNG-оправы: две независимые оценки — по IPD (линзы) и по ширине лица (затемки).
+    // Раньше использовался clamp к 0.72–0.85 * box: верхняя граница часто **занижала** оправу
+    // относительно реальных висков. Берём max(IPD-based, breadth-based) и мягко ограничиваем сверху.
+    const eyeDistanceWidthFactor = 2.38;
+    final widthFromInterpupillary = eyeDistance * eyeDistanceWidthFactor;
+    // Доля от размаха лица: оправа чуть уже полного «висок-висок», но ближе к 90%+, чем к 80%.
+    const frameWidthToFacialBreadth = 0.93;
+    final widthFromFacialBreadth = facialBreadth * frameWidthToFacialBreadth;
+
+    var glassesWidth = math.max(widthFromInterpupillary, widthFromFacialBreadth);
+    final maxReasonableWidth = math.max(boxWidth, facialBreadth) * 1.04;
+    glassesWidth = glassesWidth.clamp(eyeDistance * 2.0, maxReasonableWidth);
+
+    // Высота строго из пропорций ассета.
     final glassesAspect = glassesImage.height / glassesImage.width;
     final glassesHeight = glassesWidth * glassesAspect;
 
-    // Центр очков размещаем между глазами.
-    final centerX = (leftMostEye.x + rightMostEye.x) / 2;
-    // Небольшой вертикальный оффсет оставляем параметром калибровки:
-    // отрицательное значение поднимает очки, положительное опускает.
-    const verticalOffsetFactor = 0.01;
-    final centerY = (leftMostEye.y + rightMostEye.y) / 2 + (glassesHeight * verticalOffsetFactor);
+    // --- Центр: между глазами + лёгкий перенос к переносице (как в 3D-слое проекта) ---
+    final eyesCenterX = (leftMostEye.x + rightMostEye.x) / 2;
+    final eyesCenterY = (leftMostEye.y + rightMostEye.y) / 2;
+    final noseBaseLm = face.landmarks[FaceLandmarkType.noseBase];
+    double centerX = eyesCenterX;
+    double centerY = eyesCenterY;
+    if (noseBaseLm != null) {
+      const noseBridgeBlend = 0.06;
+      final nb = noseBaseLm.position;
+      centerX = eyesCenterX * (1 - noseBridgeBlend) + nb.x * noseBridgeBlend;
+      centerY = eyesCenterY * (1 - noseBridgeBlend) + nb.y * noseBridgeBlend;
+    }
+    // Смещение по вертикали: положительное — вниз в координатах изображения.
+    // Уменьшено относительно старого 0.055, чтобы мост не «сидел» слишком низко на носу.
+    const verticalOffsetFactor = 0.028;
+    centerY += glassesHeight * verticalOffsetFactor;
 
     // Угол наклона очков должен совпадать с линией глаз.
     // atan2 корректно работает во всех квадрантах и не ломается при dx ~= 0.
