@@ -1,7 +1,20 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:augen/augen.dart';
 import 'package:flutter/material.dart';
+
+/// True, если приложение запущено в **iOS Simulator** (не на устройстве).
+///
+/// В симуляторе нет полноценного ARKit: [AugenView] всё равно создаёт нативный RealityKit/Metal
+/// слой, из‑за чего в консоль сыпятся сообщения вроде `default-binaryarchive.metallib`,
+/// `BuiltinRenderGraphResources/AR/*.rematerial` и т.п. — это не баг приложения, а ограничение среды.
+/// Поэтому AR‑виджет на симуляторе не монтируем и сразу показываем понятный экран.
+bool get _isIosSimulator {
+  if (!Platform.isIOS) return false;
+  return Platform.environment['SIMULATOR_DEVICE_NAME'] != null ||
+      Platform.environment['SIMULATOR_UDID'] != null;
+}
 
 void main() {
   runApp(const GlassesTryOnApp());
@@ -91,6 +104,21 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   void initState() {
     super.initState();
     _selectedModelId = _glassesModels.firstWhere((e) => e.isAvailable).id;
+
+    // Без нативного AR‑view: сразу тот же UX, что и после isARSupported() == false.
+    if (_isIosSimulator) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _platformViewReady = true;
+          _isCheckingSetup = false;
+          _isSupported = false;
+          _sessionSetupStarted = true;
+          _setupUserMessage =
+              'AR недоступен на этом устройстве или в эмуляторе — нужен аппарат с ARCore и AR‑под камерой либо iOS с ARKit.';
+        });
+      });
+    }
   }
 
   /// Создаётся из [AugenView] уже с нужным platform view id — здесь включается сессия AR (см. документацию augen).
@@ -292,15 +320,17 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          AugenView(
-            onViewCreated: _onAugenViewCreated,
-            config: const ARSessionConfig(
-              planeDetection: false,
-              lightEstimation: true,
-              depthData: false,
-              autoFocus: true,
+          // На симуляторе не создаём platform view — см. [_isIosSimulator].
+          if (!_isIosSimulator)
+            AugenView(
+              onViewCreated: _onAugenViewCreated,
+              config: const ARSessionConfig(
+                planeDetection: false,
+                lightEstimation: true,
+                depthData: false,
+                autoFocus: true,
+              ),
             ),
-          ),
 
           /// Пока нативное AR‑представление не подключилось, показываем подсказку поверх заглушки.
           if (!_platformViewReady || _isCheckingSetup)

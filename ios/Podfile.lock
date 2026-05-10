@@ -19,10 +19,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/image_picker_ios/ios"
 
 SPEC CHECKSUMS:
-  augen: 3aa4b5b992f5bc3cee4e0919e6e3ebc38284094c
+  augen: 1fab224f9c5b5382a7a1ce034ece9b3cda78e5bb
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
+  image_picker_ios: 4f2f91b01abdb52842a8e277617df877e40f905b
 
-PODFILE CHECKSUM: 9580a49fa2c095d51100c20f258df867100b916b
+PODFILE CHECKSUM: fb4be6d77e9aa94b2a0905985fa557dc9d2ad17d
 
 COCOAPODS: 1.16.2

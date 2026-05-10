@@ -6,6 +6,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
+  # augen ≥1.x требует Dart ^3.9.2 — нужен актуальный stable Flutter с Dart 3.9+.
   sdk: ^3.10.4
 
 

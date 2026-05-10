@@ -1,5 +1,6 @@
 # Uncomment this line to define a global platform for your project
-platform :ios, '15.5'
+# augen/RealityKit в 1.x вызывает API уровня iOS 18+ (например generateCylinder).
+platform :ios, '18.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,5 +40,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Platform в Podfile — 18.0, но у отдельных pod-таргетов CocoaPods часто оставляет 13.0.
+      # Тогда Swift компилирует Augen как «совместимый с iOS 13» и запрещает MeshResource.generateCylinder (iOS 18+).
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
+    end
   end
 end
