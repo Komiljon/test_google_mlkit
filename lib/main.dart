@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:augen/augen.dart';
 import 'dart:async';
+
+import 'package:augen/augen.dart';
+import 'package:flutter/material.dart';
 
 void main() {
   runApp(const GlassesTryOnApp());
@@ -27,143 +28,251 @@ class GlassesTryOnScreen extends StatefulWidget {
 }
 
 class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
+  /// Выдаётся [AugenView] после создания нативного platform view — без этого канал связи недействителен.
   AugenController? _controller;
+
+  /// Платформенный вид AR уже сообщил свой id (то же самое, что делает виджет [AugenView] внутри себя).
+  bool _platformViewReady = false;
+
+  /// Однократный запуск настройки сессии после [onViewCreated].
+  bool _sessionSetupStarted = false;
+
   bool _isInitialized = false;
   bool _isSupported = false;
-  bool _isCheckingSupport = true; // Добавим состояние проверки
-  List<ARFace> _trackedFaces = [];
-  String? _selectedGlasses;
+  bool _isCheckingSetup = false;
+  String? _setupUserMessage;
 
-  final List<GlassesModel> _glassesModels = [
-    GlassesModel(id: 'glasses_1', name: 'Классические', modelPath: 'assets/models/sunglasses.glb'),
-    GlassesModel(id: 'glasses_2', name: 'Солнцезащитные', modelPath: 'assets/models/sunglasses.glb'),
-    GlassesModel(id: 'glasses_3', name: 'Очки-авиаторы', modelPath: 'assets/models/sunglasses.glb'),
-    GlassesModel(id: 'glasses_4', name: 'Круглые', modelPath: 'assets/models/sunglasses.glb'),
+  List<ARFace> _trackedFaces = [];
+
+  /// Выбор хранится по стабильному id, чтобы не путаться при одинаковых путях к моделям.
+  late String _selectedModelId;
+
+  StreamSubscription<List<ARFace>>? _facesSub;
+  StreamSubscription<String>? _errorSub;
+
+  /// Какие очки уже «надеты» на лицо faceId → id модели (для минимизации remove/add каждый кадр).
+  final Map<String, String> _appliedModelByFaceId = {};
+
+  /// Конфиги для примерки: два рабочих GLB из [assets/models], третий слот объясняет ограничение PLY для augen ([ModelFormat] в документации).
+  static final List<GlassesModel> _glassesModels = [
+    GlassesModel(
+      id: 'sunglasses',
+      name: 'Sunglasses A',
+      assetPath: 'assets/models/sunglasses.glb',
+      localPosition: const Vector3(0, 0.02, 0.05),
+      rotation: Quaternion.identity(),
+      scale: const Vector3(0.08, 0.08, 0.08),
+    ),
+    GlassesModel(
+      id: 'sunglasses_alt',
+      name: 'Sunglasses B',
+      assetPath: 'assets/models/sunglasses1.glb',
+      // Вторая сетка чуть масштаб/смещение под корректное «сидение» на лице.
+      localPosition: const Vector3(0, 0.018, 0.048),
+      rotation: Quaternion.identity(),
+      scale: const Vector3(0.085, 0.085, 0.085),
+    ),
+    GlassesModel.unavailablePreview(
+      id: 'aa_ply',
+      title: 'aa.ply (нужен GLB)',
+      reason:
+          'В assets есть aa.ply, но augen загружает glTF / GLB / OBJ / USDZ. Экспортируйте модель в .glb, положите в assets/models и добавьте в список.',
+    ),
   ];
+
+  GlassesModel? _findModel(String id) {
+    for (final m in _glassesModels) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
-    _initializeAR();
+    _selectedModelId = _glassesModels.firstWhere((e) => e.isAvailable).id;
   }
 
-  Future<void> _initializeAR() async {
+  /// Создаётся из [AugenView] уже с нужным platform view id — здесь включается сессия AR (см. документацию augen).
+  void _onAugenViewCreated(AugenController controller) {
+    setState(() {
+      _platformViewReady = true;
+    });
+
+    unawaited(_setupARSession(controller));
+  }
+
+  Future<void> _setupARSession(AugenController controller) async {
+    if (_sessionSetupStarted) return;
+    _sessionSetupStarted = true;
+    _controller = controller;
+
+    setState(() {
+      _isCheckingSetup = true;
+      _setupUserMessage = null;
+    });
+
+    final supported = await controller.isARSupported();
+    if (!mounted) return;
+
+    _isSupported = supported;
+    if (!supported) {
+      setState(() {
+        _isCheckingSetup = false;
+        _setupUserMessage =
+            'AR недоступен на этом устройстве или в эмуляторе — нужен аппарат с ARCore и AR‑под камерой либо iOS с ARKit.';
+      });
+      _showMessage(_setupUserMessage!);
+      return;
+    }
+
+    const sessionConfig = ARSessionConfig(
+      planeDetection: false,
+      lightEstimation: true,
+      depthData: false,
+      autoFocus: true,
+    );
+
     try {
-      // Создаем контроллер с viewId (обязательный параметр)
-      _controller = AugenController(0);
-
-      // Проверяем поддержку AR *через экземпляр контроллера*
-      _isSupported = await _controller!.isARSupported();
-
-      // Обновим состояние проверки
-      if (mounted) {
-        setState(() {
-          _isCheckingSupport = false;
-        });
-      }
-
-      if (!_isSupported) {
-        // Вместо завершения, покажем сообщение и остановимся
-        _showMessage('AR не поддерживается на этом устройстве. Попробуйте запустить на другом.');
-        return; // ВАЖНО: Выходим из функции, не продолжая инициализацию
-      }
-
-      // --- Если поддержка подтверждена, продолжаем инициализацию ---
-
-      // Инициализируем сессию AR
-      await _controller!.initialize(
-        const ARSessionConfig(
-          planeDetection: false, // Для примерки очков плоскости не нужны
-          lightEstimation: true,
-          depthData: false,
-          autoFocus: true,
-        ),
+      await controller.initialize(sessionConfig);
+      await controller.setFaceTrackingEnabled(true);
+      // Фактический API augen ^1.1.0 — только detectLandmarks / detectExpressions / размер лица на кадре.
+      await controller.setFaceTrackingConfig(
+        detectLandmarks: true,
+        detectExpressions: false,
+        minFaceSize: 0.08,
+        maxFaceSize: 1.0,
       );
 
-      // Включаем отслеживание лиц
-      await _controller!.setFaceTrackingEnabled(true);
-
-      // Слушаем поток отслеживаемых лиц
-      _controller!.facesStream.listen((faces) {
+      _facesSub ??= controller.facesStream.listen((faces) {
         if (!mounted) return;
         setState(() {
           _trackedFaces = faces;
         });
-        _updateGlassesOnFaces(faces);
+        _syncGlassesOnFaces(faces).catchError((Object e, StackTrace st) {
+          debugPrint('sync glasses: $e\n$st');
+        });
       });
 
-      // Слушаем ошибки
-      _controller!.errorStream.listen((error) {
+      _errorSub ??= controller.errorStream.listen((error) {
         _showMessage('Ошибка AR: $error');
       });
 
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-
-      _showMessage('AR готово! Покажите лицо перед камерой');
-    } catch (e) {
-      // Обновим состояние проверки при ошибке
-      if (mounted) {
-        setState(() {
-          _isCheckingSupport = false;
-        });
-      }
-      _showMessage('Ошибка инициализации: $e');
+      if (!mounted) return;
+      setState(() {
+        _isInitialized = true;
+        _isCheckingSetup = false;
+      });
+      _showMessage('AR готово. Выберите модель очков ниже.');
+    } catch (e, st) {
+      debugPrint('AR init failed: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isCheckingSetup = false;
+        _setupUserMessage = 'Не удалось запустить сессию AR: $e';
+      });
+      _showMessage(_setupUserMessage!);
     }
   }
 
-  void _updateGlassesOnFaces(List<ARFace> faces) {
-    if (_selectedGlasses == null || _controller == null) return;
+  /// Стабильный id узла на лице (один объект очков на одно отслеживаемое лицо).
+  String _glassesNodeId(String faceId) => 'glasses_$faceId';
+
+  Future<void> _clearAllFaceGlasses() async {
+    final c = _controller;
+    if (c == null) return;
+    final entries = List<MapEntry<String, String>>.from(_appliedModelByFaceId.entries);
+    for (final e in entries) {
+      try {
+        await c.removeNodeFromTrackedFace(nodeId: _glassesNodeId(e.key), faceId: e.key);
+      } catch (err, st) {
+        debugPrint('removeNodeFromTrackedFace: $err\n$st');
+      }
+    }
+    _appliedModelByFaceId.clear();
+  }
+
+  /// Снимает узлы с лиц, которые пропали из надёжного трекинга, и добавляет/обновляет только при смене модели или лица.
+  Future<void> _syncGlassesOnFaces(List<ARFace> faces) async {
+    final c = _controller;
+    if (!_isInitialized || c == null) return;
+
+    final chosen = _findModel(_selectedModelId);
+    if (chosen == null || !chosen.isAvailable || chosen.assetPath == null) return;
+
+    final reliableFaceIds = <String>{};
+    for (final f in faces) {
+      if (f.isTracked && f.isReliable) reliableFaceIds.add(f.id);
+    }
+
+    // Лица перестали отслеживаться — явно отвязываем узел (API для контента на лице — removeNodeFromTrackedFace).
+    for (final fid in _appliedModelByFaceId.keys.toList()) {
+      if (!reliableFaceIds.contains(fid)) {
+        try {
+          await c.removeNodeFromTrackedFace(nodeId: _glassesNodeId(fid), faceId: fid);
+        } catch (err, st) {
+          debugPrint('remove stale face glasses: $err\n$st');
+        }
+        _appliedModelByFaceId.remove(fid);
+      }
+    }
+
+    if (!mounted) return;
 
     for (final face in faces) {
-      if (face.isTracked && face.isReliable) {
-        final glassesNodeId = 'glasses_${face.id}';
+      if (!(face.isTracked && face.isReliable)) continue;
+      final fid = face.id;
+      if (_appliedModelByFaceId[fid] == _selectedModelId) continue;
 
-        // Удаляем старые очки, если есть
-        _controller!.removeNode(glassesNodeId);
+      final nodeId = _glassesNodeId(fid);
 
-        // Создаем новую 3D модель очков из внешнего файла
-        final glassesNode = ARNode.fromModel(
-          id: glassesNodeId,
-          modelPath: _selectedGlasses!,
-          // Позиционируем очки относительно лица
-          // Позиция (0, 0, 0) - центр лица, смещаем немного вперед
-          position: const Vector3(0, 0, 0.05),
-          rotation: const Quaternion(0, 0, 0, 1),
-          // Масштаб подбирается индивидуально для каждой модели
-          scale: const Vector3(0.08, 0.08, 0.08),
+      try {
+        if (_appliedModelByFaceId.containsKey(fid)) {
+          await c.removeNodeFromTrackedFace(nodeId: nodeId, faceId: fid);
+          _appliedModelByFaceId.remove(fid);
+        }
+
+        final node = ARNode.fromModel(
+          id: nodeId,
+          modelPath: chosen.assetPath!,
+          position: chosen.localPosition,
+          rotation: chosen.rotation,
+          scale: chosen.scale,
         );
 
-        // Добавляем модель к отслеживаемому лицу
-        _controller!.addNodeToTrackedFace(nodeId: glassesNodeId, faceId: face.id, node: glassesNode).catchError((error) {
-          print('Ошибка добавления очков к лицу: $error');
-        });
-      } else {
-        // Если лицо больше не отслеживается, удаляем с него очки
-        final glassesNodeId = 'glasses_${face.id}';
-        _controller!.removeNode(glassesNodeId);
+        await c.addNodeToTrackedFace(nodeId: nodeId, faceId: fid, node: node);
+        _appliedModelByFaceId[fid] = _selectedModelId;
+      } catch (e, st) {
+        debugPrint('face glasses attach failed: $e\n$st');
       }
     }
   }
 
-  Future<void> _selectGlasses(String modelPath) async {
+  Future<void> _onSelectModel(String modelId) async {
+    final m = _findModel(modelId);
+    if (m == null) return;
+    if (!m.isAvailable) {
+      _showMessage(m.unavailableReason ?? 'Модель недоступна для примерки.');
+      return;
+    }
+
     setState(() {
-      _selectedGlasses = modelPath;
+      _selectedModelId = modelId;
     });
 
-    // Обновляем очки на всех отслеживаемых лицах
-    _updateGlassesOnFaces(_trackedFaces);
-
-    _showMessage('Выбраны новые очки!');
+    await _clearAllFaceGlasses();
+    if (!mounted) return;
+    await _syncGlassesOnFaces(_trackedFaces);
+    if (!mounted) return;
+    _showMessage('Выбрана модель «${m.name}».');
   }
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 30)));
-    print(message);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 30)),
+    );
+    debugPrint(message);
   }
 
   @override
@@ -175,78 +284,101 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
           if (_isInitialized)
             IconButton(
               icon: Icon(_isSupported ? Icons.face : Icons.face_outlined),
-              onPressed: null, // Отслеживание включено постоянно
+              onPressed: null,
               tooltip: 'Отслеживание лиц активно',
             ),
         ],
       ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // Основное AR представление
-          if (_isInitialized)
-            AugenView(
-              onViewCreated: (controller) {
-                // Контроллер уже инициализирован в _initializeAR
-              },
-              config: const ARSessionConfig(planeDetection: false, lightEstimation: true, depthData: false, autoFocus: true),
+          AugenView(
+            onViewCreated: _onAugenViewCreated,
+            config: const ARSessionConfig(
+              planeDetection: false,
+              lightEstimation: true,
+              depthData: false,
+              autoFocus: true,
             ),
+          ),
 
-          // Сообщение о неподдерживаемом устройстве ИЛИ во время проверки
-          if ((_isCheckingSupport || !_isSupported) && !_isInitialized)
-            const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  SizedBox(height: 16),
-                  Text(
-                    'Проверка поддержки AR...',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    key: ValueKey('checking_support'),
-                  ),
-                  SizedBox(height: 8),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: Text('Пожалуйста, подождите...', textAlign: TextAlign.center, key: ValueKey('checking_wait')),
-                  ),
-                ],
-              ),
-            ),
-
-          // Сообщение об ошибке поддержки (после проверки)
-          if (!_isSupported && !_isCheckingSupport && !_isInitialized)
-            const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  SizedBox(height: 16),
-                  Text(
-                    'Устройство не поддерживает AR',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    key: ValueKey('no_support'),
-                  ),
-                  SizedBox(height: 8),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Для работы приложения требуется устройство с поддержкой дополненной реальности (ARCore для Android или ARKit для iOS).',
+          /// Пока нативное AR‑представление не подключилось, показываем подсказку поверх заглушки.
+          if (!_platformViewReady || _isCheckingSetup)
+            Container(
+              color: Colors.black26,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 24),
+                    Text(
+                      !_platformViewReady ? 'Подключение AR‑камеры...' : 'Проверка и запуск AR...',
+                      key: !_platformViewReady ? const ValueKey('waiting_view') : const ValueKey('checking_ar'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                       textAlign: TextAlign.center,
-                      key: ValueKey('no_support_desc'),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Если вы запускаете в эмуляторе - AR не работает в эмуляторе.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontStyle: FontStyle.italic),
-                    key: ValueKey('emulator_warning'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
-          // Панель выбора очков (только если инициализировано)
+          /// AR не поддерживается (или не смогли убедиться на устройстве).
+          if (_platformViewReady && !_isCheckingSetup && !_isSupported)
+            Container(
+              color: Colors.black87,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 64, color: Colors.redAccent),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Устройство не поддерживает AR или AR недоступен',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _setupUserMessage ??
+                            'Запускайте приложение на физическом устройстве с ARCore или ARKit. В большинстве эмуляторов AR недоступен.',
+                        style: const TextStyle(color: Colors.white70),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          /// Платформа поддерживается, но сессия упала после проверки.
+          if (_platformViewReady &&
+              !_isCheckingSetup &&
+              _isSupported &&
+              !_isInitialized &&
+              (_setupUserMessage != null))
+            Container(
+              color: Colors.black87,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.videocam_off, size: 56, color: Colors.orange),
+                      const SizedBox(height: 16),
+                      Text(
+                        _setupUserMessage!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           if (_isInitialized)
             Positioned(
               bottom: 20,
@@ -262,6 +394,12 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                       'Выберите очки для примерки',
                       style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Два варианта — GLB из assets; aa.ply отмечен как недоступный до конвертации в GLB.',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 120,
@@ -270,10 +408,11 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                         itemCount: _glassesModels.length,
                         itemBuilder: (context, index) {
                           final model = _glassesModels[index];
-                          final isSelected = _selectedGlasses == model.modelPath;
+                          final isSelected = _selectedModelId == model.id;
+                          final dimmed = !model.isAvailable;
 
                           return GestureDetector(
-                            onTap: () => _selectGlasses(model.modelPath),
+                            onTap: () => _onSelectModel(model.id),
                             child: Container(
                               margin: const EdgeInsets.symmetric(horizontal: 8),
                               width: 100,
@@ -283,10 +422,16 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                                     width: 80,
                                     height: 80,
                                     decoration: BoxDecoration(
-                                      color: isSelected ? Colors.blue.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
+                                      color: dimmed
+                                          ? Colors.grey.withValues(alpha: 0.2)
+                                          : (isSelected
+                                                ? Colors.blue.withValues(alpha: 0.3)
+                                                : Colors.grey.withValues(alpha: 0.3)),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: isSelected ? Colors.blue : Colors.white.withOpacity(0.5),
+                                        color: dimmed
+                                            ? Colors.white24
+                                            : (isSelected ? Colors.blue : Colors.white.withValues(alpha: 0.5)),
                                         width: 2,
                                       ),
                                     ),
@@ -295,7 +440,9 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                                         '${index + 1}',
                                         style: TextStyle(
                                           fontSize: 24,
-                                          color: isSelected ? Colors.blue : Colors.white,
+                                          color: dimmed
+                                              ? Colors.white38
+                                              : (isSelected ? Colors.blue : Colors.white),
                                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                         ),
                                       ),
@@ -305,11 +452,15 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                                   Text(
                                     model.name,
                                     style: TextStyle(
-                                      color: isSelected ? Colors.blue : Colors.white,
+                                      color: dimmed
+                                          ? Colors.white38
+                                          : (isSelected ? Colors.blueAccent : Colors.white),
                                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                       fontSize: 12,
                                     ),
                                     textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
@@ -323,7 +474,6 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               ),
             ),
 
-          // Информация об отслеживании (только если инициализировано)
           if (_isInitialized)
             Positioned(
               top: 20,
@@ -375,16 +525,46 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
 
   @override
   void dispose() {
+    _facesSub?.cancel();
+    _errorSub?.cancel();
     _controller?.dispose();
     super.dispose();
   }
 }
 
-// Модель для описания очков
+/// Описание одной пары очков для AR: ресурс из assets на лице + локальный трансформ в системе лица augen.
 class GlassesModel {
   final String id;
   final String name;
-  final String modelPath;
+  /// Путь вида assets/... только для поддерживаемых форматов; null если слот зарезервирован под недоступный формат (.ply и т.д.).
+  final String? assetPath;
+  final bool isAvailable;
+  final String? unavailableReason;
+  /// Смещение относительно привязки «лицо»: для каждого меша обычно подбирается вручную.
+  final Vector3 localPosition;
+  final Quaternion rotation;
+  final Vector3 scale;
 
-  GlassesModel({required this.id, required this.name, required this.modelPath});
+  GlassesModel({
+    required this.id,
+    required this.name,
+    required this.assetPath,
+    required this.localPosition,
+    required this.rotation,
+    required this.scale,
+  }) : isAvailable = true,
+       unavailableReason = null;
+
+  /// Плейсхолдер в списке (например PLY без конвертации в GLB).
+  GlassesModel.unavailablePreview({
+    required this.id,
+    required String title,
+    required String reason,
+  }) : name = title,
+       assetPath = null,
+       isAvailable = false,
+       unavailableReason = reason,
+       localPosition = Vector3.zero(),
+       rotation = Quaternion.identity(),
+       scale = const Vector3(1, 1, 1);
 }
