@@ -14,8 +14,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8   
-  ar_flutter_plugin: ^0.7.3 
+  cupertino_icons: ^1.0.8
+  # Транзитивные зависимости `flutter_3d_ar_converter`; зафиксированы явно для ResolvingFaceARViewer.
+  ar_flutter_plugin: ^0.7.3
+  arkit_plugin: ^1.0.7
   flutter_3d_ar_converter: ^0.1.1
   path_provider: ^2.1.5
   path: ^1.9.1
@@ -37,3 +39,6 @@ flutter:
     - assets/glasses1.png
     - assets/glasses2.png
     - assets/glasses3.png
+    - assets/sunglasses_lenses.glb
+    - assets/models/sunglasses.glb
+    - assets/models/sunglasses1.glb
