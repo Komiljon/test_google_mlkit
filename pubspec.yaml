@@ -15,11 +15,15 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8    
+  # Major 0.12.x доступен; перед обновлением см. changelog пакета camera (интерфейсы Android/iOS).
   camera: ^0.11.3
   camera_android: ^0.10.10+14
   camera_avfoundation: ^0.9.23
   google_mlkit_face_detection: ^0.13.2
-  google_mlkit_commons: 
+  # Явная версия для воспроизводимых сборок (совместимо с google_mlkit_face_detection 0.13.x).
+  google_mlkit_commons: ^0.11.1
+  # Декод + bakeOrientation(EXIF) — выровнять пиксели для ML Kit и Flutter decodeImageFromList.
+  image: ^4.5.4
   path_provider: ^2.1.5
   path: ^1.9.1
   image_picker: ^1.2.1

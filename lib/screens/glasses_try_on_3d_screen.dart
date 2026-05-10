@@ -9,6 +9,7 @@ import '../face_tracking/glasses_try_on_calibration.dart';
 import '../face_tracking/face_pose_data.dart';
 import '../face_tracking/face_pose_estimator.dart';
 import '../glasses_3d/glasses_3d_overlay.dart';
+import '../input_image/mlkit_image_prepare.dart';
 import '../painting/decoded_image_painter.dart';
 
 /// Отдельный экран для 3D-режима примерки очков из GLB.
@@ -27,13 +28,16 @@ class GlassesTryOn3DScreen extends StatefulWidget {
 }
 
 class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
-  late final FaceDetector _faceDetector;
+  late FaceDetector _faceDetector;
   late final ImagePicker _picker;
   late final FacePoseEstimator _poseEstimator;
 
   ui.Image? _image;
   Size? _imageSize;
   FacePoseData _pose = FacePoseData.invalid;
+
+  /// Синхронно с 2D-экраном: bake EXIF + ML Kit.
+  bool _isScanning = false;
 
   @override
   void initState() {
@@ -53,33 +57,57 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
 
   @override
   void dispose() {
+    _image?.dispose();
     _faceDetector.close();
     super.dispose();
   }
 
   Future<void> _pickAndAnalyzeImage({required bool isFromCamera}) async {
     setState(() {
-      _image = null;
-      _imageSize = null;
-      _pose = FacePoseData.invalid;
+      _isScanning = true;
     });
 
-    final imageXFile = await _picker.pickImage(source: isFromCamera ? ImageSource.camera : ImageSource.gallery);
-    if (imageXFile == null) return;
+    PreparedMlKitImage? prepared;
+    try {
+      final imageXFile = await _picker.pickImage(source: isFromCamera ? ImageSource.camera : ImageSource.gallery);
+      if (imageXFile == null) {
+        return;
+      }
 
-    final inputImage = InputImage.fromFilePath(imageXFile.path);
-    final faces = await _faceDetector.processImage(inputImage);
-    final imageBytes = await imageXFile.readAsBytes();
-    final decodedImage = await decodeImageFromList(imageBytes);
+      final rawBytes = await imageXFile.readAsBytes();
+      prepared = await prepareImageBytesForMlKit(rawBytes, suffix: '3d');
 
-    final pose = _poseEstimator.estimatePrimaryFace(faces);
+      final inputImage = inputImageFromPreparedFile(prepared.tempJpegFile);
+      final faces = await _faceDetector.processImage(inputImage);
+      final decodedImage = await decodePreparedBytesToUiImage(prepared.bytesForDecodeAndMlKit);
 
-    if (!mounted) return;
-    setState(() {
-      _image = decodedImage;
-      _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
-      _pose = pose;
-    });
+      final pose = _poseEstimator.estimatePrimaryFace(faces);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _image?.dispose();
+        _image = decodedImage;
+        _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+        _pose = pose;
+      });
+    } catch (e, st) {
+      debugPrint('3D pick/analyze: $e\n$st');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обработки изображения: $e')),
+      );
+    } finally {
+      await prepared?.deleteTempFile();
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    }
   }
 
   @override
@@ -89,30 +117,53 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Center(
-              child: _image == null
-                  ? const Text('Выберите изображение для 3D-режима', style: TextStyle(fontSize: 18))
-                  : FittedBox(
-                      fit: BoxFit.contain,
-                      child: SizedBox(
-                        width: _imageSize!.width,
-                        height: _imageSize!.height,
-                        child: Stack(
-                          children: [
-                            // Пиксель-в-пиксель с результатом ML Kit (см. DecodedImagePainter).
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: DecodedImagePainter(_image!),
-                              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(
+                  child: _image == null
+                      ? const Text('Выберите изображение для 3D-режима', style: TextStyle(fontSize: 18))
+                      : FittedBox(
+                          fit: BoxFit.contain,
+                          child: SizedBox(
+                            width: _imageSize!.width,
+                            height: _imageSize!.height,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: CustomPaint(
+                                    painter: DecodedImagePainter(_image!),
+                                  ),
+                                ),
+                                Glasses3DOverlay(
+                                  pose: _pose,
+                                  modelAssetPath: GlassesAssetPaths.sunglassesLensesGlb,
+                                ),
+                              ],
                             ),
-                            Glasses3DOverlay(
-                              pose: _pose,
-                              modelAssetPath: GlassesAssetPaths.sunglassesLensesGlb,
+                          ),
+                        ),
+                ),
+                if (_isScanning)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: const Color(0x66000000),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Распознавание лица…',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
                             ),
                           ],
                         ),
                       ),
                     ),
+                  ),
+              ],
             ),
           ),
           Padding(
@@ -129,11 +180,11 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton(
-                  onPressed: () => _pickAndAnalyzeImage(isFromCamera: true),
+                  onPressed: _isScanning ? null : () => _pickAndAnalyzeImage(isFromCamera: true),
                   child: const Text('Камера'),
                 ),
                 ElevatedButton(
-                  onPressed: () => _pickAndAnalyzeImage(isFromCamera: false),
+                  onPressed: _isScanning ? null : () => _pickAndAnalyzeImage(isFromCamera: false),
                   child: const Text('Галерея'),
                 ),
               ],
