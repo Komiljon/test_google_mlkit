@@ -2,10 +2,15 @@ import 'dart:async';
 
 import 'package:augen/augen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:test_google_mlkit/models/ar_glasses_model.dart';
 import 'package:test_google_mlkit/utils/ar_device_hints.dart';
 
 /// Полноэкранная примерка очков: [AugenView], трекинг лица, [addNodeToTrackedFace] с GLB из assets.
+///
+/// **Ограничение augen (проверено для 1.1.0):** в Dart есть face API, но нативные iOS/Android
+/// обработчики канала не реализуют `setFaceTrackingEnabled` и связанные вызовы — тогда ловим
+/// [MissingPluginException] и показываем пояснение вместо «сырого» стека.
 class GlassesTryOnScreen extends StatefulWidget {
   const GlassesTryOnScreen({super.key});
 
@@ -127,13 +132,30 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
 
     try {
       await controller.initialize(sessionConfig);
-      await controller.setFaceTrackingEnabled(true);
-      await controller.setFaceTrackingConfig(
-        detectLandmarks: true,
-        detectExpressions: false,
-        minFaceSize: 0.08,
-        maxFaceSize: 1.0,
-      );
+
+      // В pub `augen` 1.1.0 нативный слой (Swift/Kotlin) отвечает на эти методы как «not implemented»,
+      // из‑за чего на стороне Dart прилетает MissingPluginException — это не баг приложения.
+      try {
+        await controller.setFaceTrackingEnabled(true);
+        await controller.setFaceTrackingConfig(
+          detectLandmarks: true,
+          detectExpressions: false,
+          minFaceSize: 0.08,
+          maxFaceSize: 1.0,
+        );
+      } on MissingPluginException catch (e, st) {
+        debugPrint('augen: face tracking API в нативном плагине не реализован: $e\n$st');
+        if (!mounted) return;
+        setState(() {
+          _isCheckingSetup = false;
+          _setupUserMessage =
+              'Пакет augen пока не реализует примерку по лицу на нативном уровне (iOS/Android): '
+              'в Dart методы есть, в Swift/Kotlin для канала augen_<id> нет обработчиков face API. '
+              'Следите за релизами augen, issue на GitHub плагина или рассмотрите ARKit/SceneKit отдельно.';
+        });
+        _showMessage(_setupUserMessage!);
+        return;
+      }
 
       _facesSub ??= controller.facesStream.listen((faces) {
         if (!mounted) return;

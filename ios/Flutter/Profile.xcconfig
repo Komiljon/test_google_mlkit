@@ -1,0 +1,6 @@
+// Конфигурация сборки Profile (например `flutter run --profile`).
+// CocoaPods создаёт отдельный файл Pods-Runner.profile.xcconfig; если для Profile
+// оставить только Release.xcconfig, Xcode не подхватит pod-настройки и CocoaPods
+// выдаёт предупреждение о base configuration.
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"
+#include "Generated.xcconfig"
