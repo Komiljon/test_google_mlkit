@@ -29,7 +29,11 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  # Динамические Swift-фреймворки (`use_frameworks!` без :static) часто дают dyld при старте:
+  # «Symbol not found … Foundation4DataV36_unconditionallyBridgeFromObjectiveC…» в поде (например augen),
+  # потому что символ ищется в системном Foundation, а ожидания ABI расходятся между модулями.
+  # Статическая линковка — рекомендуемый для Flutter вариант, когда все плагины на Swift.
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Test Google Mlkit</string>
+	<string>Примерка очков AR</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -46,8 +46,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	
+	<!-- ARKit + отслеживание лица: без камеры сессия AR не стартует (см. документацию augen, раздел Face Tracking). -->
 	<key>NSCameraUsageDescription</key>
-	<string>Камера нужна для примерки очков</string>
+	<string>Камера и ARKit нужны, чтобы накладывать 3D-модель очков на ваше лицо в реальном времени.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен для записи видео</string>
 	<key>NSPhotoLibraryUsageDescription</key>
