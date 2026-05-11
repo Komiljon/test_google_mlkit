@@ -1,0 +1,41 @@
+name: flutter_3d_ar_converter
+description: "A Flutter package for converting images to 3D models with AR visualization capabilities."
+version: 0.1.1
+homepage: https://github.com/draz26648/flutter_3d_ar_converter
+
+environment:
+  sdk: ^3.7.2
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ar_flutter_plugin: ^0.7.3
+  arkit_plugin: ^1.0.7
+  camera: ^0.10.5+5
+  image_picker: ^1.0.4
+  http: ^1.1.0
+  path_provider: ^2.1.1
+  model_viewer_plus: ^1.7.0
+  google_ml_kit: ^0.16.2
+  vector_math: ^2.1.4
+  permission_handler: ^10.4.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# Регистрация нативного плагина (в апстриме 0.1.1 этой секции не было — из‑за этого
+# iOS/Android не подключали MethodChannel и возникал MissingPluginException).
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.flutter_3d_ar_converter
+        pluginClass: Flutter3dArConverterPlugin
+      ios:
+        pluginClass: Flutter3dArConverterPlugin

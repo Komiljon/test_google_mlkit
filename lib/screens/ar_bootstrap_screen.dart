@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_3d_ar_converter/flutter_3d_ar_converter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -64,7 +66,14 @@ class _ArBootstrapScreenState extends State<ArBootstrapScreen> {
         final outcome = snapshot.data!;
         final c = outcome.converter;
 
-        if (!outcome.initializedOk || !c.isARAvailable) {
+        // Важно: `isARAvailable` (world tracking) может быть true на старых iPhone,
+        // а `ARFaceTrackingConfiguration` — нет (нужны TrueDepth / поддержка лица в ARKit).
+        // Иначе пользователь попадает в примерку и получает только нативные ошибки arkit_plugin.
+        final faceArOk = c.isFaceTrackingAvailable;
+        final worldArOnly =
+            outcome.initializedOk && c.isARAvailable && !faceArOk;
+
+        if (!outcome.initializedOk || !c.isARAvailable || worldArOnly) {
           return Scaffold(
             appBar: AppBar(title: const Text('AR недоступен')),
             body: Padding(
@@ -76,9 +85,18 @@ class _ArBootstrapScreenState extends State<ArBootstrapScreen> {
                       size: 64, color: Colors.orange),
                   const SizedBox(height: 16),
                   Text(
-                    'На этом устройстве не удалось поднять AR-сессию '
-                    '(или отсутствует ARCore / ARKit). '
-                    'Всё равно можно открыть каталог, но Face AR скорее всего не заработает.',
+                    worldArOnly && Platform.isIOS
+                        ? 'На этом iPhone нет поддержки отслеживания лица в AR '
+                            '(ARKit Face Tracking). Обычно нужен iPhone с TrueDepth '
+                            '(Face ID) или совместимое устройство для ARFaceTrackingConfiguration. '
+                            'Каталог можно открыть для просмотра, но сцена примерки через камеру не заработает.'
+                        : worldArOnly && Platform.isAndroid
+                            ? 'На этом устройстве недоступен Face AR (ARCore Face API). '
+                                'Каталог можно открыть, примерка по лицу, скорее всего, не запустится.'
+                            : 'На этом устройстве не удалось поднять AR-сессию '
+                                '(или отсутствует ARCore / ARKit). '
+                                'На симуляторе iOS Face AR и часть конфигураций ARKit недоступны — проверьте на реальном iPhone с поддержкой TrueDepth. '
+                                'Каталог всё равно можно открыть, но Face AR на симуляторе чаще всего не заработает.',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 24),

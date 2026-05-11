@@ -21,9 +21,11 @@ final List<GlassesCatalogItem> kGlassesCatalog = [
   GlassesCatalogItem(
     id: 'sunglasses_full',
     title: 'Солнцезащитные (full)',
-    description: 'GLB из assets/models/sunglasses.glb',
+    // Пока используем тот же bundle, что и эталон: добавьте свой `assets/models/*.glb`,
+    // пропишите его в pubspec и замените `glbFlutterAsset` ниже.
+    description: 'Пресет с другой калибровкой (тот же GLB, что линзы).',
     previewAssetPath: 'assets/glasses2.png',
-    glbFlutterAsset: 'assets/models/sunglasses.glb',
+    glbFlutterAsset: 'assets/sunglasses_lenses.glb',
     documentRelativePath: 'models/catalog_sunglasses.glb',
     arCalibration: {
       FaceArCalibrationKeys.androidArScale: [0.2, 0.2, 0.2],
@@ -34,9 +36,9 @@ final List<GlassesCatalogItem> kGlassesCatalog = [
   GlassesCatalogItem(
     id: 'sunglasses_alt',
     title: 'Солнцезащитные (alt)',
-    description: 'GLB из assets/models/sunglasses1.glb — альтернативная сетка.',
+    description: 'Третий пресет калибровки (тот же GLB). Подключите отдельный .glb при необходимости.',
     previewAssetPath: 'assets/glasses3.png',
-    glbFlutterAsset: 'assets/models/sunglasses1.glb',
+    glbFlutterAsset: 'assets/sunglasses_lenses.glb',
     documentRelativePath: 'models/catalog_sunglasses1.glb',
     arCalibration: {
       FaceArCalibrationKeys.androidArScale: [0.18, 0.18, 0.18],

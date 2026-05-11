@@ -1,5 +1,8 @@
-# Uncomment this line to define a global platform for your project
-platform :ios, '15.5'
+# Минимальная iOS для всего приложения и подов. Должна быть не ниже, чем требуют зависимости
+# (например CryptorRSA под iOS 14.5+), иначе Xcode ругается: «Compiling for iOS 11.0, but module …».
+ios_deployment_target = '15.5'
+
+platform :ios, ios_deployment_target
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,5 +42,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # Выравниваем deployment target у каждого Pod; иначе часть podspec'ов оставляет 11.0 и
+    # ломается сборка Swift при смешении с модулями вроде CryptorRSA (минимум 14.5).
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = ios_deployment_target
+    end
   end
 end

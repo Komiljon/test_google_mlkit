@@ -209,10 +209,9 @@ packages:
   flutter_3d_ar_converter:
     dependency: "direct main"
     description:
-      name: flutter_3d_ar_converter
-      sha256: "0c1c0e0d79f91e7faced627c8c4f119f99824112d909305f906cb11aa3e3eedc"
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/flutter_3d_ar_converter"
+      relative: true
+    source: path
     version: "0.1.1"
   flutter_lints:
     dependency: "direct dev"
