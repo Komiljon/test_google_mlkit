@@ -65,9 +65,20 @@ class _Glasses3DOverlayState extends State<Glasses3DOverlay> {
 
     // Базовая орбита model-viewer близка к "0deg 75deg 105%".
     // Подкручиваем ее углами головы, чтобы модель реагировала на поворот лица.
-    final theta = yawDeg * Glasses3DOverlayCalibration.yawInfluenceDegrees / 45.0;
-    final phi = (75 - (pitchDeg * Glasses3DOverlayCalibration.pitchInfluenceDegrees / 45.0)).clamp(15, 120).toDouble();
-    _controller.setCameraOrbit(theta, phi, Glasses3DOverlayCalibration.cameraRadius);
+    final theta =
+        yawDeg * Glasses3DOverlayCalibration.yawInfluenceDegrees / 45.0;
+    final phi =
+        (75 -
+                (pitchDeg *
+                    Glasses3DOverlayCalibration.pitchInfluenceDegrees /
+                    45.0))
+            .clamp(15, 120)
+            .toDouble();
+    _controller.setCameraOrbit(
+      theta,
+      phi,
+      Glasses3DOverlayCalibration.cameraRadius,
+    );
     _controller.setCameraTarget(0, 0, 0);
   }
 
@@ -82,8 +93,10 @@ class _Glasses3DOverlayState extends State<Glasses3DOverlay> {
     // Размер именно по межзрачковому расстоянию — так область WebView согласована с лицом,
     // без «второго» масштаба через baseline (он давал слишком мелкое превью модели).
     final modelWidth =
-        widget.pose.eyeDistancePx * Glasses3DOverlayCalibration.overlayWidthPerEyeDistance;
-    final modelHeight = modelWidth * Glasses3DOverlayCalibration.modelAspectRatio;
+        widget.pose.eyeDistancePx *
+        Glasses3DOverlayCalibration.overlayWidthPerEyeDistance;
+    final modelHeight =
+        modelWidth * Glasses3DOverlayCalibration.modelAspectRatio;
     final left = widget.pose.center.dx - (modelWidth / 2);
     final top = widget.pose.center.dy - (modelHeight / 2);
 

@@ -17,8 +17,8 @@ dependencies:
   cupertino_icons: ^1.0.8    
   # Major 0.12.x доступен; перед обновлением см. changelog пакета camera (интерфейсы Android/iOS).
   camera: ^0.11.3
-  camera_android: ^0.10.10+14
-  camera_avfoundation: ^0.9.23
+  # Явная привязка к CameraX: NV21 для imageStream + ML Kit (см. changelog camera_android_camerax).
+  camera_android_camerax: ^0.6.30
   google_mlkit_face_detection: ^0.13.2
   # Явная версия для воспроизводимых сборок (совместимо с google_mlkit_face_detection 0.13.x).
   google_mlkit_commons: ^0.11.1

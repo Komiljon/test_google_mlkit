@@ -69,7 +69,9 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
 
     PreparedMlKitImage? prepared;
     try {
-      final imageXFile = await _picker.pickImage(source: isFromCamera ? ImageSource.camera : ImageSource.gallery);
+      final imageXFile = await _picker.pickImage(
+        source: isFromCamera ? ImageSource.camera : ImageSource.gallery,
+      );
       if (imageXFile == null) {
         return;
       }
@@ -79,7 +81,9 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
 
       final inputImage = inputImageFromPreparedFile(prepared.tempJpegFile);
       final faces = await _faceDetector.processImage(inputImage);
-      final decodedImage = await decodePreparedBytesToUiImage(prepared.bytesForDecodeAndMlKit);
+      final decodedImage = await decodePreparedBytesToUiImage(
+        prepared.bytesForDecodeAndMlKit,
+      );
 
       final pose = _poseEstimator.estimatePrimaryFace(faces);
 
@@ -89,7 +93,10 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
       setState(() {
         _image?.dispose();
         _image = decodedImage;
-        _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+        _imageSize = Size(
+          decodedImage.width.toDouble(),
+          decodedImage.height.toDouble(),
+        );
         _pose = pose;
       });
     } catch (e, st) {
@@ -122,7 +129,10 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
               children: [
                 Center(
                   child: _image == null
-                      ? const Text('Выберите изображение для 3D-режима', style: TextStyle(fontSize: 18))
+                      ? const Text(
+                          'Выберите изображение для 3D-режима',
+                          style: TextStyle(fontSize: 18),
+                        )
                       : FittedBox(
                           fit: BoxFit.contain,
                           child: SizedBox(
@@ -137,7 +147,8 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
                                 ),
                                 Glasses3DOverlay(
                                   pose: _pose,
-                                  modelAssetPath: GlassesAssetPaths.sunglassesLensesGlb,
+                                  modelAssetPath:
+                                      GlassesAssetPaths.sunglassesLensesGlb,
                                 ),
                               ],
                             ),
@@ -156,7 +167,8 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
                             const SizedBox(height: 12),
                             Text(
                               'Распознавание лица…',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: Colors.white),
                             ),
                           ],
                         ),
@@ -180,11 +192,15 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton(
-                  onPressed: _isScanning ? null : () => _pickAndAnalyzeImage(isFromCamera: true),
+                  onPressed: _isScanning
+                      ? null
+                      : () => _pickAndAnalyzeImage(isFromCamera: true),
                   child: const Text('Камера'),
                 ),
                 ElevatedButton(
-                  onPressed: _isScanning ? null : () => _pickAndAnalyzeImage(isFromCamera: false),
+                  onPressed: _isScanning
+                      ? null
+                      : () => _pickAndAnalyzeImage(isFromCamera: false),
                   child: const Text('Галерея'),
                 ),
               ],

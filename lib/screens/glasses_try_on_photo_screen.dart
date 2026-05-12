@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,18 +9,29 @@ import 'package:image_picker/image_picker.dart';
 import '../face_tracking/face_pose_estimator.dart';
 import '../face_tracking/glasses_2d_layout.dart';
 import '../input_image/mlkit_image_prepare.dart';
+import '../widgets/glasses_picker.dart';
 import 'glasses_try_on_3d_screen.dart';
+import 'glasses_try_on_live_screen.dart';
 
-class GlassesTryOnScreen extends StatefulWidget {
-  final CameraDescription camera;
+/// Экран примерки по **одному снимку** (камера/галерея) + 2D PNG поверх фото.
+///
+/// Раньше файл назывался `test_google_mlkit.dart`, что путало с unit-тестами.
+/// Отдельно доступны [GlassesTryOnLiveScreen] (поток) и [GlassesTryOn3DScreen] (GLB).
+class GlassesTryOnPhotoScreen extends StatefulWidget {
+  const GlassesTryOnPhotoScreen({super.key, required this.allCameras});
 
-  const GlassesTryOnScreen({super.key, required this.camera});
+  /// Все доступные камеры (для переходов в live / 3D с переключателем).
+  final List<CameraDescription> allCameras;
+
+  /// Камера по умолчанию для маршрутов, где нужен один [CameraDescription].
+  CameraDescription get defaultCamera => allCameras.first;
 
   @override
-  State<GlassesTryOnScreen> createState() => _GlassesTryOnScreenState();
+  State<GlassesTryOnPhotoScreen> createState() =>
+      _GlassesTryOnPhotoScreenState();
 }
 
-class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
+class _GlassesTryOnPhotoScreenState extends State<GlassesTryOnPhotoScreen> {
   late FaceDetector _faceDetector;
   late final FacePoseEstimator _poseEstimator;
   List<Face> _faces = [];
@@ -32,7 +44,11 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   /// Идёт чтение файла, bake EXIF и `processImage` ML Kit.
   bool _isScanning = false;
 
-  final List<String> glassesAssets = ['assets/glasses1.png', 'assets/glasses2.png', 'assets/glasses3.png'];
+  static const List<String> _glassesAssets = [
+    'assets/glasses1.png',
+    'assets/glasses2.png',
+    'assets/glasses3.png',
+  ];
 
   @override
   void initState() {
@@ -61,7 +77,16 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
   void _openGlasses3DScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => GlassesTryOn3DScreen(camera: widget.camera),
+        builder: (_) => GlassesTryOn3DScreen(camera: widget.defaultCamera),
+      ),
+    );
+  }
+
+  /// Живой поток с камеры (отдельный экран с собственным [FaceDetector]).
+  void _openLiveScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GlassesTryOnLiveScreen(allCameras: widget.allCameras),
       ),
     );
   }
@@ -74,7 +99,9 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
     PreparedMlKitImage? prepared;
     try {
       final imageXFile = await _picker.pickImage(
-        source: isFromCamera != null && isFromCamera ? ImageSource.camera : ImageSource.gallery,
+        source: isFromCamera != null && isFromCamera
+            ? ImageSource.camera
+            : ImageSource.gallery,
       );
 
       if (imageXFile == null) {
@@ -86,7 +113,9 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
 
       final inputImage = inputImageFromPreparedFile(prepared.tempJpegFile);
       final facesList = await _faceDetector.processImage(inputImage);
-      final imageDecoded = await decodePreparedBytesToUiImage(prepared.bytesForDecodeAndMlKit);
+      final imageDecoded = await decodePreparedBytesToUiImage(
+        prepared.bytesForDecodeAndMlKit,
+      );
 
       if (!mounted) {
         return;
@@ -95,7 +124,10 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
         _image?.dispose();
         _faces = facesList;
         _image = imageDecoded;
-        _imageSize = Size(imageDecoded.width.toDouble(), imageDecoded.height.toDouble());
+        _imageSize = Size(
+          imageDecoded.width.toDouble(),
+          imageDecoded.height.toDouble(),
+        );
       });
     } catch (e, st) {
       debugPrint('Ошибка загрузки/распознавания: $e\n$st');
@@ -130,7 +162,9 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
     } catch (e) {
       debugPrint('Error loading glasses image: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки очков: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка загрузки очков: $e')));
     }
   }
 
@@ -140,6 +174,11 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
       appBar: AppBar(
         title: const Text('Virtual Glasses Try-On'),
         actions: [
+          IconButton(
+            tooltip: 'Live с камеры',
+            onPressed: _isScanning ? null : _openLiveScreen,
+            icon: const Icon(Icons.videocam),
+          ),
           IconButton(
             tooltip: 'Открыть 3D режим',
             onPressed: _isScanning ? null : _openGlasses3DScreen,
@@ -155,7 +194,10 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               children: [
                 Center(
                   child: _image == null
-                      ? const Text('Выберите изображение', style: TextStyle(fontSize: 18))
+                      ? const Text(
+                          'Выберите изображение',
+                          style: TextStyle(fontSize: 18),
+                        )
                       : FittedBox(
                           fit: BoxFit.contain,
                           child: SizedBox(
@@ -184,7 +226,8 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
                             const SizedBox(height: 12),
                             Text(
                               'Распознавание лица…',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: Colors.white),
                             ),
                           ],
                         ),
@@ -200,17 +243,20 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton(
-                  onPressed: _isScanning ? null : () => _getAndScanImage(isFromCamera: true),
+                  onPressed: _isScanning
+                      ? null
+                      : () => _getAndScanImage(isFromCamera: true),
                   child: const Text('Камера'),
                 ),
                 ElevatedButton(
-                  onPressed: _isScanning ? null : () => _getAndScanImage(isFromCamera: false),
+                  onPressed: _isScanning
+                      ? null
+                      : () => _getAndScanImage(isFromCamera: false),
                   child: const Text('Галерея'),
                 ),
               ],
             ),
           ),
-          // Явный переключатель режимов: текущий экран — 2D PNG; 3D GLB — отдельный экран.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Wrap(
@@ -220,7 +266,12 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               children: [
                 const Chip(
                   avatar: Icon(Icons.image_outlined, size: 18),
-                  label: Text('Сейчас: 2D (PNG очки)'),
+                  label: Text('Сейчас: фото (2D PNG)'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _isScanning ? null : _openLiveScreen,
+                  icon: const Icon(Icons.videocam),
+                  label: const Text('Live с камеры'),
                 ),
                 ElevatedButton.icon(
                   onPressed: _isScanning ? null : _openGlasses3DScreen,
@@ -230,31 +281,11 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
               ],
             ),
           ),
-          SizedBox(
-            height: 100,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: glassesAssets.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: _isScanning ? null : () => _selectGlasses(glassesAssets[index]),
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: _selectedGlasses == glassesAssets[index] ? Colors.blue[100] : Colors.grey[200],
-                      border: Border.all(
-                        color: _selectedGlasses == glassesAssets[index] ? Colors.blue : Colors.transparent,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(child: Text('Очки ${index + 1}', textAlign: TextAlign.center)),
-                  ),
-                );
-              },
-            ),
+          GlassesPickerStrip(
+            glassesAssets: _glassesAssets,
+            selectedGlassesPath: _selectedGlasses,
+            onSelectGlasses: _selectGlasses,
+            enabled: !_isScanning,
           ),
         ],
       ),
@@ -263,17 +294,17 @@ class _GlassesTryOnScreenState extends State<GlassesTryOnScreen> {
 }
 
 class FacePainter extends CustomPainter {
-  final List<Face> faceList;
-  final ui.Image image;
-  final ui.Image? glassesImage;
-  final FacePoseEstimator poseEstimator;
-
   FacePainter({
     required this.faceList,
     required this.image,
     this.glassesImage,
     required this.poseEstimator,
   });
+
+  final List<Face> faceList;
+  final ui.Image image;
+  final ui.Image? glassesImage;
+  final FacePoseEstimator poseEstimator;
 
   @override
   void paint(ui.Canvas canvas, ui.Size size) {
@@ -305,7 +336,12 @@ class FacePainter extends CustomPainter {
       ..rotateZ(layout.rollRadians)
       ..translateByDouble(-layout.width / 2, -layout.height / 2, 0, 1);
 
-    final srcRect = ui.Rect.fromLTWH(0, 0, glassesImage.width.toDouble(), glassesImage.height.toDouble());
+    final srcRect = ui.Rect.fromLTWH(
+      0,
+      0,
+      glassesImage.width.toDouble(),
+      glassesImage.height.toDouble(),
+    );
     final dstRect = ui.Rect.fromLTWH(0, 0, layout.width, layout.height);
 
     canvas.save();

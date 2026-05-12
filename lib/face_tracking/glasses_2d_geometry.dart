@@ -13,7 +13,10 @@ double facialBreadthPx({
   double? cheekSpanPx,
 }) {
   final raw = earSpanPx ?? cheekSpanPx ?? boxWidthPx;
-  return math.max(raw, boxWidthPx * Glasses2DCalibration.facialBreadthMinToBoxFactor);
+  return math.max(
+    raw,
+    boxWidthPx * Glasses2DCalibration.facialBreadthMinToBoxFactor,
+  );
 }
 
 /// Длина отрезка между двумя точками лэндмарков в пикселях.
@@ -30,12 +33,12 @@ double glassesWidthPx({
   required double boxWidthPx,
 }) {
   final fromIpd = eyeDistancePx * Glasses2DCalibration.eyeDistanceWidthFactor;
-  final fromBreadth = facialBreadthPx * Glasses2DCalibration.frameWidthToFacialBreadth;
+  final fromBreadth =
+      facialBreadthPx * Glasses2DCalibration.frameWidthToFacialBreadth;
   var w = math.max(fromIpd, fromBreadth);
-  final cap = math.max(boxWidthPx, facialBreadthPx) * Glasses2DCalibration.maxWidthOverBreadthFactor;
-  w = w.clamp(
-    eyeDistancePx * Glasses2DCalibration.minWidthToIpdFactor,
-    cap,
-  );
+  final cap =
+      math.max(boxWidthPx, facialBreadthPx) *
+      Glasses2DCalibration.maxWidthOverBreadthFactor;
+  w = w.clamp(eyeDistancePx * Glasses2DCalibration.minWidthToIpdFactor, cap);
   return w;
 }

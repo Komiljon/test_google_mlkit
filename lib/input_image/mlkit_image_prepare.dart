@@ -18,7 +18,10 @@ class PreparedMlKitImage {
   /// Временный файл с теми же байтами — для [InputImage.fromFilePath] на нативной стороне ML Kit.
   final File tempJpegFile;
 
-  PreparedMlKitImage({required this.bytesForDecodeAndMlKit, required this.tempJpegFile});
+  PreparedMlKitImage({
+    required this.bytesForDecodeAndMlKit,
+    required this.tempJpegFile,
+  });
 
   /// Высвободить временный файл после использования (можно вызвать из `finally`).
   Future<void> deleteTempFile() async {
@@ -35,11 +38,14 @@ class PreparedMlKitImage {
 /// Готовит байты и файл для ML Kit + отображения из сырых байтов файла с камеры/галереи.
 ///
 /// Если декодирование через `package:image` не удалось, возвращаем исходные байты и копию во временный файл.
-Future<PreparedMlKitImage> prepareImageBytesForMlKit(Uint8List rawBytes, {String suffix = 'pick'}) async {
+Future<PreparedMlKitImage> prepareImageBytesForMlKit(
+  Uint8List rawBytes, {
+  String suffix = 'pick',
+}) async {
   final dir = await getTemporaryDirectory();
   final ts = DateTime.now().millisecondsSinceEpoch;
 
-  img.Image? decoded = img.decodeImage(rawBytes);
+  final img.Image? decoded = img.decodeImage(rawBytes);
   if (decoded != null) {
     final baked = img.bakeOrientation(decoded);
     final jpg = Uint8List.fromList(img.encodeJpg(baked, quality: 92));
@@ -52,11 +58,15 @@ Future<PreparedMlKitImage> prepareImageBytesForMlKit(Uint8List rawBytes, {String
   final ext = '.jpg';
   final file = File(p.join(dir.path, 'mlkit_${suffix}_raw_$ts$ext'));
   await file.writeAsBytes(rawBytes);
-  return PreparedMlKitImage(bytesForDecodeAndMlKit: rawBytes, tempJpegFile: file);
+  return PreparedMlKitImage(
+    bytesForDecodeAndMlKit: rawBytes,
+    tempJpegFile: file,
+  );
 }
 
 /// Строит [InputImage] из уже подготовленного временного JPEG (путь обязан быть с правильной ориентацией пикселей).
-InputImage inputImageFromPreparedFile(File file) => InputImage.fromFilePath(file.path);
+InputImage inputImageFromPreparedFile(File file) =>
+    InputImage.fromFilePath(file.path);
 
 /// Декодирует подготовленный JPEG/PNG в [ui.Image] для отрисовки (`CustomPaint` и т.д.).
 ///

@@ -1,16 +1,12 @@
 # test_google_mlkit
 
-Google ML Kit
+Пример Flutter-приложения: **виртуальная примерка очков** с Google ML Kit Face Detection — режим **фото** (2D PNG), **live** с камеры и отдельный **3D** (GLB через `flutter_3d_controller`).
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Для live-режима нужна физическая камера (или эмулятор с камерой) и разрешения камеры на iOS/Android.

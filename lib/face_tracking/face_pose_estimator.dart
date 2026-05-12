@@ -11,7 +11,6 @@ import 'glasses_try_on_calibration.dart';
 /// Вся калибровка задаётся в `glasses_try_on_calibration.dart`;
 /// здесь только геометрия сборки позы из landmarks и euler-углов головы ML Kit.
 class FacePoseEstimator {
-
   /// Возвращает позу только по первому лицу.
   /// Для MVP достаточно одного лица, чтобы не усложнять UI/UX.
   FacePoseData estimatePrimaryFace(List<Face> faces) {
@@ -41,7 +40,10 @@ class FacePoseEstimator {
 
     // Центр между глазами как основной якорь; при наличии `noseBase` слегка смещаем
     // в сторону переносицы — так мост очков лучше совпадает с реальной геометрией лица.
-    final eyesCenter = Offset((leftMostEye.x + rightMostEye.x) / 2, (leftMostEye.y + rightMostEye.y) / 2);
+    final eyesCenter = Offset(
+      (leftMostEye.x + rightMostEye.x) / 2,
+      (leftMostEye.y + rightMostEye.y) / 2,
+    );
     final noseBasePt = face.landmarks[FaceLandmarkType.noseBase]?.position;
     final weightedCenter = noseBasePt != null
         ? _blendTowardsNoseBridge(
@@ -58,7 +60,10 @@ class FacePoseEstimator {
 
     // Масштабируем модель от расстояния между глазами.
     final rawScale = eyeDistance / FacePoseCalibration.baselineEyeDistance;
-    final scale = rawScale.clamp(FacePoseCalibration.minScale, FacePoseCalibration.maxScale);
+    final scale = rawScale.clamp(
+      FacePoseCalibration.minScale,
+      FacePoseCalibration.maxScale,
+    );
 
     // Roll в радианах можно стабильно получить по линии глаз.
     final roll = math.atan2(dy, dx);

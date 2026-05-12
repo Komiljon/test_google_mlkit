@@ -23,12 +23,15 @@ void main() {
       );
     });
 
-    test('если только бокс — raw равен ширине бокса (она уже >= порога 0.94 * box)', () {
-      expect(
-        facialBreadthPx(boxWidthPx: 100, earSpanPx: null, cheekSpanPx: null),
-        100,
-      );
-    });
+    test(
+      'если только бокс — raw равен ширине бокса (она уже >= порога 0.94 * box)',
+      () {
+        expect(
+          facialBreadthPx(boxWidthPx: 100, earSpanPx: null, cheekSpanPx: null),
+          100,
+        );
+      },
+    );
   });
 
   group('glassesWidthPx', () {
@@ -42,15 +45,39 @@ void main() {
         boxWidthPx: box,
       );
       final fromIpd = ipd * Glasses2DCalibration.eyeDistanceWidthFactor;
-      final fromBreadth = breadth * Glasses2DCalibration.frameWidthToFacialBreadth;
+      final fromBreadth =
+          breadth * Glasses2DCalibration.frameWidthToFacialBreadth;
       final expectedMax = fromIpd > fromBreadth ? fromIpd : fromBreadth;
       expect(w, expectedMax);
-      final cap = (box > breadth ? box : breadth) * Glasses2DCalibration.maxWidthOverBreadthFactor;
+      final cap =
+          (box > breadth ? box : breadth) *
+          Glasses2DCalibration.maxWidthOverBreadthFactor;
       expect(w <= cap, true);
     });
 
     test('segmentLengthPx считает евклидову длину', () {
       expect(segmentLengthPx(0, 0, 3, 4), 5);
     });
+
+    test(
+      'очень малое IPD и большой размах лица: ширина не ниже minWidthToIpdFactor * ipd',
+      () {
+        // Имитация «профиль»: межзрачковое маленькое, но лицо широкое по ушам/боксу.
+        const ipd = 8.0;
+        const breadth = 220.0;
+        const box = 200.0;
+        final w = glassesWidthPx(
+          eyeDistancePx: ipd,
+          facialBreadthPx: breadth,
+          boxWidthPx: box,
+        );
+        final minByIpd = ipd * Glasses2DCalibration.minWidthToIpdFactor;
+        expect(w >= minByIpd, true);
+        final cap =
+            (box > breadth ? box : breadth) *
+            Glasses2DCalibration.maxWidthOverBreadthFactor;
+        expect(w <= cap, true);
+      },
+    );
   });
 }
