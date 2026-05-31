@@ -1,0 +1,48 @@
+---
+description: Flutter — нативные слои android/ и ios/ (минимальные правки, платформенные настройки)
+globs: android/**,ios/**
+alwaysApply: false
+---
+
+# Flutter: android/ и ios/
+
+Нативные каталоги — **тонкая оболочка** вокруг Flutter. Основная логика — в `lib/`. Не дублируй бизнес-логику в Kotlin/Swift без явной необходимости.
+
+## Когда трогать нативный слой
+
+| Задача | Где править |
+|--------|-------------|
+| Разрешения (камера, фото, сеть) | `AndroidManifest.xml`, `Info.plist` |
+| ML Kit / CameraX / плагины камеры | манифест, `minSdk`, Gradle при ошибках сборки |
+| Иконка, splash, имя приложения | `res/`, `Assets.xcassets`, `Info.plist` |
+| minSdk / targetSdk / iOS version | `build.gradle.kts`, `Podfile` |
+| Platform channels | `MainActivity.kt`, `AppDelegate.swift` |
+
+Перед добавлением permission — проверь, **нужен ли он плагину**; не копируй шаблоны «на всякий случай».
+
+## Android (`android/`)
+
+- **Gradle Kotlin DSL** — `build.gradle.kts`.
+- **applicationId / namespace:** `com.alamat.test_google_mlkit` (см. `app/build.gradle.kts`).
+- **Java 17** — `compileOptions` / `kotlinOptions` (как в шаблоне Flutter 3.41+).
+- **Gradle wrapper** — для Flutter 3.41+ обычно **8.14**, AGP **8.11.x** (см. `settings.gradle.kts`); не откатывай на 7.x без причины — ломается `FlutterPlugin.kt`.
+- **Не править** сгенерированное Flutter (`GeneratedPluginRegistrant`, кэш `.gradle/`).
+- После правок Gradle — при сбоях: закрыть параллельные сборки, `gradlew --stop`, `flutter clean`.
+
+## iOS (`ios/`)
+
+- **Минимальная версия** — из `Podfile`.
+- **Info.plist** — `NSCameraUsageDescription` и др. только если функция реально используется.
+- **Pods/** — не коммитить ручные правки; `pod install` / `flutter pub get`.
+
+## Проверка
+
+```bash
+flutter build apk --release
+```
+
+Не утверждай «собралось», пока не виден вывод команды. Типичные ошибки: отсутствующий asset в `pubspec.yaml`, блокировка `~/.gradle/caches` вторым Gradle (PID lock).
+
+## Комментарии
+
+Комментарии в нативном коде — **на русском**, по делу (зачем permission, зачем изменение в манифесте).

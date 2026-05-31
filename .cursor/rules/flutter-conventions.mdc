@@ -1,0 +1,46 @@
+---
+description: Конвенции Flutter-проекта test_google_mlkit — стек, структура, паттерны
+globs: lib/**/*.dart,pubspec.yaml,analysis_options.yaml
+alwaysApply: false
+---
+
+# test_google_mlkit — Flutter
+
+## Стек (версии — из `pubspec.yaml` / `pubspec.lock`)
+
+- **Камера:** `camera`, `camera_android_camerax` (NV21 / imageStream на Android)
+- **Лицо:** `google_mlkit_face_detection`, `google_mlkit_commons`
+- **Изображения:** `image` (EXIF / ориентация), `image_picker`
+- **3D-оверлей:** `flutter_3d_controller`
+- **Утилиты:** `path_provider`, `path`, `vector_math`
+
+Перед использованием API пакета — **`user-dart`** (`read_package_uris`) или **`user-context7`**, не память модели.
+
+## Структура `lib/`
+
+| Папка | Назначение |
+|-------|------------|
+| `screens/` | Экраны: live/photo/3D примерка, каталог, bootstrap AR (если используется) |
+| `widgets/` | Общие виджеты (`glasses_picker`, AR-обёртки) |
+| `face_tracking/` | Детекция лица, pose, 2D-геометрия очков, калибровка |
+| `glasses_3d/` | 3D-наложение поверх кадра |
+| `painting/` | Отрисовка декодированного кадра |
+| `input_image/` | Подготовка `InputImage` для ML Kit |
+| `models/`, `data/` | Каталог очков, метаданные |
+| `services/` | Работа с ассетами / файлами на диске |
+
+Точка входа: `lib/main.dart` → примерка с камерой или заглушка без камер.
+
+## Паттерны
+
+- Калибровка наложения — `lib/face_tracking/glasses_try_on_calibration.dart` и связанные layout/geometry.
+- Ассеты очков: `assets/glasses*.png`, `assets/*.glb` — **должны быть перечислены** в `pubspec.yaml` и существовать на диске.
+- Не смешивай без нужды старый AR-поток (`flutter_3d_ar_converter`, `ResolvingFaceARViewer`) с ML Kit live — уточни у пользователя целевой сценарий.
+
+## Запуск Android-эмулятора
+
+По запросу «Запусти андроид» / «Запусти эмулятор»:
+
+```bash
+flutter emulators --launch Pixel_9_Pro
+```

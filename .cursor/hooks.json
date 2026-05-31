@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/flutter-analyze.ps1",
+        "timeout": 90
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/flutter-analyze.ps1",
+        "matcher": "Write|StrReplace",
+        "timeout": 90
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "user-dart": {
+      "command": "dart",
+      "args": ["mcp-server"]
+    },
+    "user-context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    }
+  }
+}

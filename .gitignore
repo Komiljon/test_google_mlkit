@@ -44,4 +44,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/build
-.cursor/
+
+# Cursor: правила и hooks в репозитории; локальное состояние hooks — нет
+.cursor/hooks/.flutter-analyze.last
+.cursor/hooks/debug-flow.log
