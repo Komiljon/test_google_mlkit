@@ -47,7 +47,6 @@ class _Glasses3DOverlayState extends State<Glasses3DOverlay> {
   @override
   void dispose() {
     _controller.onModelLoaded.removeListener(_onModelLoadedChanged);
-    _controller.onModelLoaded.dispose();
     super.dispose();
   }
 
@@ -79,10 +78,52 @@ class _Glasses3DOverlayState extends State<Glasses3DOverlay> {
       phi,
       Glasses3DOverlayCalibration.cameraRadius,
     );
-    _controller.setCameraTarget(0, 0, 0);
+    _controller.setCameraTarget(
+      Glasses3DOverlayCalibration.cameraTargetX,
+      Glasses3DOverlayCalibration.cameraTargetY,
+      Glasses3DOverlayCalibration.cameraTargetZ,
+    );
   }
 
   double _radToDeg(double radians) => radians * 180 / math.pi;
+
+  double _modelWidthForPose(FacePoseData pose) {
+    final widthFromEyes =
+        pose.eyeDistancePx *
+        Glasses3DOverlayCalibration.overlayWidthPerEyeDistance;
+
+    if (pose.facialBreadthPx <= 0 || pose.faceBoxWidthPx <= 0) {
+      return widthFromEyes;
+    }
+
+    // Берём максимум из IPD и ширины лица: IPD хорошо держит масштаб линз,
+    // а скулы/уши не дают оправе выглядеть одинаково на разных типах лица.
+    final widthFromFace =
+        pose.facialBreadthPx *
+        Glasses3DOverlayCalibration.frameWidthToFacialBreadth;
+    final rawWidth = math.max(widthFromEyes, widthFromFace);
+
+    final minWidth =
+        pose.eyeDistancePx * Glasses3DOverlayCalibration.minWidthToIpdFactor;
+    final measuredFaceWidth = math.max(
+      pose.faceBoxWidthPx,
+      pose.facialBreadthPx,
+    );
+    final maxWidth =
+        measuredFaceWidth *
+        Glasses3DOverlayCalibration.maxWidthOverBreadthFactor;
+
+    // При сильном повороте лица отдельные landmarks могут стать шумными.
+    // Если верхняя граница внезапно меньше нижней, сохраняем валидный диапазон.
+    final safeMaxWidth = math.max(maxWidth, minWidth);
+    return rawWidth.clamp(minWidth, safeMaxWidth).toDouble();
+  }
+
+  double _verticalOffsetForPose(FacePoseData pose, double modelHeight) {
+    return modelHeight * Glasses3DOverlayCalibration.verticalOffsetFactor +
+        pose.eyeToNoseBasePx *
+            Glasses3DOverlayCalibration.noseBaseVerticalOffsetFactor;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,15 +131,16 @@ class _Glasses3DOverlayState extends State<Glasses3DOverlay> {
       return const SizedBox.shrink();
     }
 
-    // Размер именно по межзрачковому расстоянию — так область WebView согласована с лицом,
-    // без «второго» масштаба через baseline (он давал слишком мелкое превью модели).
-    final modelWidth =
-        widget.pose.eyeDistancePx *
-        Glasses3DOverlayCalibration.overlayWidthPerEyeDistance;
+    // Автоподгонка: IPD задаёт масштаб линз, а ширина лица ограничивает оправу,
+    // чтобы полная GLB-модель реалистичнее садилась на виски/скулы.
+    final modelWidth = _modelWidthForPose(widget.pose);
     final modelHeight =
         modelWidth * Glasses3DOverlayCalibration.modelAspectRatio;
     final left = widget.pose.center.dx - (modelWidth / 2);
-    final top = widget.pose.center.dy - (modelHeight / 2);
+    final top =
+        widget.pose.center.dy -
+        (modelHeight / 2) +
+        _verticalOffsetForPose(widget.pose, modelHeight);
 
     return Positioned(
       left: left,

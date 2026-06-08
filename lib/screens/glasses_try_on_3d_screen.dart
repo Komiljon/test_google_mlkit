@@ -148,7 +148,7 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
                                 Glasses3DOverlay(
                                   pose: _pose,
                                   modelAssetPath:
-                                      GlassesAssetPaths.sunglassesLensesGlb,
+                                      GlassesAssetPaths.sunglassesGlb,
                                 ),
                               ],
                             ),
@@ -182,7 +182,7 @@ class _GlassesTryOn3DScreenState extends State<GlassesTryOn3DScreen> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: Text(
               _pose.isValid
-                  ? '3D модель привязана к позе лица (yaw/pitch/roll + scale).'
+                  ? 'Полная 3D модель очков привязана к позе лица (yaw/pitch/roll + scale).'
                   : 'Лицо не найдено или landmarks недостаточны для 3D-привязки.',
             ),
           ),

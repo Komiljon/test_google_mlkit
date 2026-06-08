@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import 'face_pose_data.dart';
+import 'glasses_2d_geometry.dart';
 import 'glasses_try_on_calibration.dart';
 
 /// Сервис преобразования landmarks/углов ML Kit в набор параметров для 3D-модели очков.
@@ -53,6 +54,10 @@ class FacePoseEstimator {
         : eyesCenter;
 
     final box = face.boundingBox;
+    final facialBreadth = _estimateFacialBreadth(face);
+    final eyeToNoseBase = noseBasePt == null
+        ? 0.0
+        : math.max(0.0, noseBasePt.y.toDouble() - eyesCenter.dy);
     final center = Offset(
       weightedCenter.dx + box.width * FacePoseCalibration.centerOffsetXFactor,
       weightedCenter.dy + box.height * FacePoseCalibration.centerOffsetYFactor,
@@ -76,6 +81,9 @@ class FacePoseEstimator {
     return FacePoseData(
       center: center,
       eyeDistancePx: eyeDistance,
+      facialBreadthPx: facialBreadth,
+      faceBoxWidthPx: box.width,
+      eyeToNoseBasePx: eyeToNoseBase,
       scale: scale,
       yaw: yaw,
       pitch: pitch,
@@ -85,6 +93,43 @@ class FacePoseEstimator {
   }
 
   double _degToRad(double degrees) => degrees * (math.pi / 180.0);
+
+  /// Оценивает реальную ширину лица по самым устойчивым доступным landmarks.
+  ///
+  /// Для посадки очков важно не только межзрачковое расстояние: у широкого лица
+  /// оправа должна доходить ближе к вискам, а у узкого — не вылезать за скулы.
+  double _estimateFacialBreadth(Face face) {
+    final leftEar = face.landmarks[FaceLandmarkType.leftEar]?.position;
+    final rightEar = face.landmarks[FaceLandmarkType.rightEar]?.position;
+    final leftCheek = face.landmarks[FaceLandmarkType.leftCheek]?.position;
+    final rightCheek = face.landmarks[FaceLandmarkType.rightCheek]?.position;
+
+    double? earSpanPx;
+    if (leftEar != null && rightEar != null) {
+      earSpanPx = segmentLengthPx(
+        leftEar.x.toDouble(),
+        leftEar.y.toDouble(),
+        rightEar.x.toDouble(),
+        rightEar.y.toDouble(),
+      );
+    }
+
+    double? cheekSpanPx;
+    if (leftCheek != null && rightCheek != null) {
+      cheekSpanPx = segmentLengthPx(
+        leftCheek.x.toDouble(),
+        leftCheek.y.toDouble(),
+        rightCheek.x.toDouble(),
+        rightCheek.y.toDouble(),
+      );
+    }
+
+    return facialBreadthPx(
+      boxWidthPx: face.boundingBox.width,
+      earSpanPx: earSpanPx,
+      cheekSpanPx: cheekSpanPx,
+    );
+  }
 
   /// Смешивает центр между глазами и точку переносицы для более стабильной посадки на носу.
   Offset _blendTowardsNoseBridge(Offset eyesMid, Offset noseBridge) {
