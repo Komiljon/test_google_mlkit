@@ -11,6 +11,7 @@ import '../face_tracking/glasses_2d_layout.dart';
 import '../input_image/mlkit_image_prepare.dart';
 import '../widgets/glasses_picker.dart';
 import 'glasses_try_on_3d_screen.dart';
+import 'glasses_try_on_arcore_screen.dart';
 import 'glasses_try_on_live_screen.dart';
 
 /// Экран примерки по **одному снимку** (камера/галерея) + 2D PNG поверх фото.
@@ -87,6 +88,15 @@ class _GlassesTryOnPhotoScreenState extends State<GlassesTryOnPhotoScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GlassesTryOnLiveScreen(allCameras: widget.allCameras),
+      ),
+    );
+  }
+
+  /// Нативная ARCore-примерка: отдельная камера/сессия, без ML Kit.
+  void _openArCoreScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const GlassesTryOnArCoreScreen(),
       ),
     );
   }
@@ -184,6 +194,11 @@ class _GlassesTryOnPhotoScreenState extends State<GlassesTryOnPhotoScreen> {
             onPressed: _isScanning ? null : _openGlasses3DScreen,
             icon: const Icon(Icons.view_in_ar),
           ),
+          IconButton(
+            tooltip: 'ARCore примерка',
+            onPressed: _isScanning ? null : _openArCoreScreen,
+            icon: const Icon(Icons.face_retouching_natural),
+          ),
         ],
       ),
       body: Column(
@@ -277,6 +292,11 @@ class _GlassesTryOnPhotoScreenState extends State<GlassesTryOnPhotoScreen> {
                   onPressed: _isScanning ? null : _openGlasses3DScreen,
                   icon: const Icon(Icons.view_in_ar),
                   label: const Text('3D примерка (GLB)'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _isScanning ? null : _openArCoreScreen,
+                  icon: const Icon(Icons.face_retouching_natural),
+                  label: const Text('ARCore примерка'),
                 ),
               ],
             ),
