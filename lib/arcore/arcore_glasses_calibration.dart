@@ -20,6 +20,11 @@ enum ArCoreFaceAnchor {
 ///
 /// `centerPose` лежит *внутри* головы; +Z смотрит из лица к камере.
 /// Небольшой +Y поднимает оправу к линии глаз, +Z выносит её на поверхность.
+///
+/// Значения offsetY/offsetZ подобраны под фактический AABB `sunglasses.glb`
+/// (ширина 1.304 / высота 0.422 / глубина 1.080 в исходных единицах модели) —
+/// см. план `arcore_glasses_fix`: авторский pivot GLB уже стоит на переносице,
+/// поэтому `keepAuthoredPivot = true` и небольшой офсет вместо пересадки pivot.
 abstract final class ArCoreGlassesCalibration {
   static const String defaultAssetKey = GlassesAssetPaths.sunglassesGlb;
 
@@ -27,8 +32,8 @@ abstract final class ArCoreGlassesCalibration {
   static const double widthMeters = 0.14;
 
   static const double offsetX = 0.0;
-  static const double offsetY = 0.015;
-  static const double offsetZ = 0.045;
+  static const double offsetY = 0.012;
+  static const double offsetZ = 0.03;
 
   /// Эйлер в градусах, порядок SceneView (Rotation = градусы XYZ).
   static const double rotationX = 0.0;
@@ -36,6 +41,14 @@ abstract final class ArCoreGlassesCalibration {
   static const double rotationZ = 0.0;
 
   static const ArCoreFaceAnchor anchor = ArCoreFaceAnchor.center;
+
+  /// Оставить авторский pivot GLB (на переносице) вместо центра AABB модели.
+  static const bool keepAuthoredPivot = true;
+
+  /// Depth-occluder сетки лица. Выключен по умолчанию первой итерацией —
+  /// у GLB два материала с alphaMode=BLEND (линзы/накладки), порядок отрисовки
+  /// с occluder-сеткой без явного Filament priority нужно разбирать отдельно.
+  static const bool occlusionEnabled = false;
 
   static Map<String, Object> toCreationParams({
     String assetKey = defaultAssetKey,
@@ -47,6 +60,8 @@ abstract final class ArCoreGlassesCalibration {
     double rotationY = ArCoreGlassesCalibration.rotationY,
     double rotationZ = ArCoreGlassesCalibration.rotationZ,
     ArCoreFaceAnchor anchor = ArCoreGlassesCalibration.anchor,
+    bool keepAuthoredPivot = ArCoreGlassesCalibration.keepAuthoredPivot,
+    bool occlusionEnabled = ArCoreGlassesCalibration.occlusionEnabled,
   }) {
     return <String, Object>{
       'assetKey': assetKey,
@@ -58,6 +73,8 @@ abstract final class ArCoreGlassesCalibration {
       'rotationY': rotationY,
       'rotationZ': rotationZ,
       'anchor': anchor.wireName,
+      'keepAuthoredPivot': keepAuthoredPivot,
+      'occlusionEnabled': occlusionEnabled,
     };
   }
 }

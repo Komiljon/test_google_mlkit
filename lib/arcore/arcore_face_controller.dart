@@ -44,6 +44,7 @@ class ArCoreFaceSnapshot {
     required this.tracking,
     required this.model,
     this.modelMessage,
+    this.firstFrameSeen = false,
   });
 
   final ArCoreAvailability availability;
@@ -52,6 +53,13 @@ class ArCoreFaceSnapshot {
   final ArCoreTrackingPhase tracking;
   final ArCoreModelPhase model;
   final String? modelMessage;
+
+  /// true после первого `onSessionUpdated` текущей AR-сессии.
+  ///
+  /// Чёрный/пустой вьюпорт в первую секунду — норма для ARCore (см. официальный
+  /// ARFaceDemo), а не баг. Пока флаг false, экран держит заглушку вместо
+  /// голого `AndroidView`, чтобы не пугать пользователя пустым кадром.
+  final bool firstFrameSeen;
 
   static const initial = ArCoreFaceSnapshot(
     availability: ArCoreAvailability.checking,
@@ -69,6 +77,7 @@ class ArCoreFaceSnapshot {
     ArCoreModelPhase? model,
     String? modelMessage,
     bool clearModelMessage = false,
+    bool? firstFrameSeen,
   }) {
     return ArCoreFaceSnapshot(
       availability: availability ?? this.availability,
@@ -79,6 +88,7 @@ class ArCoreFaceSnapshot {
       tracking: tracking ?? this.tracking,
       model: model ?? this.model,
       modelMessage: clearModelMessage ? null : (modelMessage ?? this.modelMessage),
+      firstFrameSeen: firstFrameSeen ?? this.firstFrameSeen,
     );
   }
 }
@@ -174,6 +184,10 @@ class ArCoreFaceController {
           modelMessage: message,
           clearModelMessage: message == null,
         );
+      case 'frame':
+        // 'pending' шлётся на каждый (пере)старт сессии, 'first' — один раз
+        // после первого onSessionUpdated этой сессии.
+        snapshot.value = current.copyWith(firstFrameSeen: state == 'first');
     }
   }
 

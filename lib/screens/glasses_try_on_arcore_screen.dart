@@ -57,6 +57,7 @@ class _GlassesTryOnArCoreScreenState extends State<GlassesTryOnArCoreScreen> {
                     setState(() {});
                   },
                 ),
+                if (_controller != null) _FirstFrameScrim(controller: _controller!),
                 if (_controller != null)
                   Positioned(
                     left: 12,
@@ -147,6 +148,46 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
+/// Заглушка на первые секунды AR-сессии: чёрный/пустой кадр камеры в этот
+/// момент — норма для ARCore (см. официальный ARFaceDemo), а не баг. Держим
+/// поверх [ArCoreFaceView], пока не пришёл первый `onSessionUpdated` или сессия
+/// не упала явной ошибкой (тогда сообщение об ошибке важнее заглушки).
+class _FirstFrameScrim extends StatelessWidget {
+  const _FirstFrameScrim({required this.controller});
+
+  final ArCoreFaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ArCoreFaceSnapshot>(
+      valueListenable: controller.snapshot,
+      builder: (context, snap, _) {
+        final showScrim =
+            !snap.firstFrameSeen && snap.session != ArCoreSessionPhase.failed;
+        if (!showScrim) {
+          return const SizedBox.shrink();
+        }
+        return const ColoredBox(
+          color: Colors.black,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Colors.white),
+                SizedBox(height: 16),
+                Text(
+                  'Ждём первый кадр фронтальной камеры…',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _RetryBar extends StatelessWidget {
   const _RetryBar({required this.controller});
 
@@ -197,6 +238,8 @@ class _CalibrationPanel extends StatelessWidget {
 
   double _num(String key) => (params[key] as num?)?.toDouble() ?? 0;
 
+  bool _flag(String key) => params[key] as bool? ?? false;
+
   @override
   Widget build(BuildContext context) {
     final anchor = ArCoreFaceAnchorWire.fromWire(params['anchor'] as String?);
@@ -226,6 +269,36 @@ class _CalibrationPanel extends StatelessWidget {
                   ),
                   const Spacer(),
                   TextButton(onPressed: onReset, child: const Text('Сброс')),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'Авторский pivot',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      value: _flag('keepAuthoredPivot'),
+                      onChanged: (v) => _patch('keepAuthoredPivot', v ?? true),
+                    ),
+                  ),
+                  Expanded(
+                    child: CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'Оккlusion лица',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      value: _flag('occlusionEnabled'),
+                      onChanged: (v) => _patch('occlusionEnabled', v ?? false),
+                    ),
+                  ),
                 ],
               ),
               _slider('Ширина, м', 'widthMeters', 0.08, 0.22),
